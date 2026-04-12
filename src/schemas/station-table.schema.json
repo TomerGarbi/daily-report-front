@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "station-table",
+  "title": "Station Table Data",
+  "description": "Schema for the station table used in daily reports. Each key is a station group name, and the value is an array of unit rows.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "array",
+    "minItems": 1,
+    "items": {
+      "$ref": "#/$defs/StationRow"
+    }
+  },
+  "$defs": {
+    "StationRow": {
+      "type": "object",
+      "description": "A single generating-unit row inside a station group.",
+      "required": [
+        "stationNumber",
+        "installedCapacity",
+        "currentCapacity",
+        "degradingCapacity",
+        "status"
+      ],
+      "properties": {
+        "stationNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unit number within the station group."
+        },
+        "installedCapacity": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Installed (nameplate) capacity in MW."
+        },
+        "currentCapacity": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Current available capacity in MW."
+        },
+        "degradingCapacity": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Capacity lost due to degradation in MW."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Inactive", "Maintenance"],
+          "description": "Operational status of the unit."
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of when the unit started. Optional — omitted if the unit is not running."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

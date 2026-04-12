@@ -1,13 +1,9 @@
-export interface User {
-  id: string;
-  email: string;
-  name?: string;
-  // extend with whatever fields your JWT payload includes
-  [key: string]: unknown;
-}
+export type Role = "guest" | "user" | "manager" | "admin";
 
-export interface AuthTokens {
-  accessToken: string;
+export interface User {
+  username: string;
+  role: Role;
+  groups: string[];
 }
 
 export interface LoginCredentials {

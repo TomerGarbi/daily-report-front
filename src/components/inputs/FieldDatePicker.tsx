@@ -21,8 +21,11 @@ const WEEKDAYS_SHORT = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmt(d: Date) {
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+function fmt(d: Date, showTime?: boolean) {
+  const datePart = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  if (!showTime) return datePart;
+  const timePart = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  return `${datePart} ${timePart}`;
 }
 
 function sameDay(a: Date, b: Date) {
@@ -43,10 +46,12 @@ function CalendarPanel({
   selected,
   onSelect,
   onClose,
+  showTime,
 }: {
   selected?: Date;
   onSelect: (d: Date) => void;
   onClose: () => void;
+  showTime?: boolean;
 }) {
   const today = new Date();
   const init = selected ?? today;
@@ -54,6 +59,10 @@ function CalendarPanel({
   const [view, setView] = React.useState<View>("cal");
   const [viewYear, setViewYear] = React.useState(init.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(init.getMonth());
+
+  const [hours, setHours] = React.useState(String(selected?.getHours() ?? 0).padStart(2, "0"));
+  const [minutes, setMinutes] = React.useState(String(selected?.getMinutes() ?? 0).padStart(2, "0"));
+  const [seconds, setSeconds] = React.useState(String(selected?.getSeconds() ?? 0).padStart(2, "0"));
 
   // Current year ± range for year dropdown
   const currentYear = today.getFullYear();
@@ -175,11 +184,15 @@ function CalendarPanel({
                   key={i}
                   type="button"
                   onClick={() => {
-                    // Normalize to noon to avoid UTC-offset shifting the date
                     const d = new Date(cell.date);
-                    d.setHours(12, 0, 0, 0);
-                    onSelect(d);
-                    onClose();
+                    if (showTime) {
+                      d.setHours(Number(hours) || 0, Number(minutes) || 0, Number(seconds) || 0, 0);
+                      onSelect(d);
+                    } else {
+                      d.setHours(12, 0, 0, 0);
+                      onSelect(d);
+                      onClose();
+                    }
                   }}
                   className={cn(
                     "mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors",
@@ -222,6 +235,78 @@ function CalendarPanel({
         </div>
       )}
 
+      {/* ── Time picker ── */}
+      {showTime && (
+        <div className="flex items-center justify-center gap-1 border-t border-slate-200 pt-3 mt-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            value={hours}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setHours(v);
+              if (selected) {
+                const d = new Date(selected);
+                d.setHours(Number(v) || 0, Number(minutes) || 0, Number(seconds) || 0, 0);
+                onSelect(d);
+              }
+            }}
+            className="w-10 rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            placeholder="HH"
+          />
+          <span className="text-sm font-bold text-slate-400">:</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            value={minutes}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setMinutes(v);
+              if (selected) {
+                const d = new Date(selected);
+                d.setHours(Number(hours) || 0, Number(v) || 0, Number(seconds) || 0, 0);
+                onSelect(d);
+              }
+            }}
+            className="w-10 rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            placeholder="MM"
+          />
+          <span className="text-sm font-bold text-slate-400">:</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            value={seconds}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setSeconds(v);
+              if (selected) {
+                const d = new Date(selected);
+                d.setHours(Number(hours) || 0, Number(minutes) || 0, Number(v) || 0, 0);
+                onSelect(d);
+              }
+            }}
+            className="w-10 rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            placeholder="SS"
+          />
+        </div>
+      )}
+
+      {/* ── Confirm button (when showTime) ── */}
+      {showTime && (
+        <div className="flex justify-center pt-2 pb-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-orange-500 px-6 py-1.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+          >
+            אישור
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -240,6 +325,7 @@ export interface FieldDatePickerProps {
   onChange?: (date: Date | undefined) => void;
   disabled?: boolean;
   className?: string;
+  showTime?: boolean;
 }
 
 export function FieldDatePicker({
@@ -252,6 +338,7 @@ export function FieldDatePicker({
   onChange,
   disabled,
   className,
+  showTime,
 }: FieldDatePickerProps) {
   const id = React.useId();
   const [open, setOpen] = React.useState(false);
@@ -284,7 +371,7 @@ export function FieldDatePicker({
             )}
           >
             <span className={value ? "text-slate-800" : "text-slate-400"}>
-              {value ? fmt(value) : placeholder}
+              {value ? fmt(value, showTime) : placeholder}
             </span>
 
             <div className="flex items-center gap-1">
@@ -315,6 +402,7 @@ export function FieldDatePicker({
               selected={value}
               onSelect={(d) => onChange?.(d)}
               onClose={() => setOpen(false)}
+              showTime={showTime}
             />
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>

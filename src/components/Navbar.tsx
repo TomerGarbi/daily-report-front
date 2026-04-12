@@ -32,11 +32,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const displayName =
-    (user?.name as string) ??
-    (user?.username as string) ??
-    (user?.sub as string) ??
-    "משתמש";
+  const displayName = user?.username ?? "משתמש";
 
   async function handleLogout() {
     await logout();

@@ -3,7 +3,6 @@
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useRef,
   useState,
@@ -14,34 +13,17 @@ import type { AuthContextValue, LoginCredentials, User } from "@/types/auth";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Decode the payload of a JWT without verifying the signature. */
-function decodeJwtPayload(token: string): Record<string, unknown> {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** Decode only the `exp` claim from a JWT (the only claim we read client-side). */
+function getExpFromToken(token: string): number | null {
   try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const json = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    return JSON.parse(json);
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return typeof payload.exp === "number" ? payload.exp : null;
   } catch {
-    return {};
+    return null;
   }
 }
-
-/** Return how many milliseconds until the token expires, minus a 30-second buffer. */
-function msUntilExpiry(token: string): number {
-  const payload = decodeJwtPayload(token);
-  if (typeof payload.exp !== "number") return 0;
-  return payload.exp * 1000 - Date.now() - 30_000;
-}
-
-// ---------------------------------------------------------------------------
-// API base URL – adjust to match your backend
-// ---------------------------------------------------------------------------
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // ---------------------------------------------------------------------------
 // Context
@@ -52,83 +34,143 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // true while restoring session
+  const [isLoading, setIsLoading] = useState(true);
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard against concurrent refresh calls
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   // -------------------------------------------------------------------------
-  // Schedule a silent refresh before the token expires
+  // Clear the proactive refresh timer
   // -------------------------------------------------------------------------
-  const scheduleRefresh = useCallback((token: string) => {
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-
-    const delay = msUntilExpiry(token);
-    if (delay <= 0) return; // already expired / no exp claim
-
-    refreshTimerRef.current = setTimeout(() => {
-      silentRefresh();
-    }, delay);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const clearRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, []);
 
   // -------------------------------------------------------------------------
-  // Apply a newly obtained access token
+  // Fetch user profile from GET /auth/me (authoritative source of user info)
   // -------------------------------------------------------------------------
-  const applyToken = useCallback(
+  const fetchMe = useCallback(async (token: string): Promise<User> => {
+    const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Failed to fetch user profile");
+    return res.json();
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Schedule a proactive refresh ~30s before the token expires
+  // -------------------------------------------------------------------------
+  const scheduleRefresh = useCallback(
     (token: string) => {
-      const payload = decodeJwtPayload(token);
-      setAccessToken(token);
-      setUser(payload as User);
-      scheduleRefresh(token);
+      clearRefreshTimer();
+      const exp = getExpFromToken(token);
+      if (exp === null) return;
+
+      const msUntilExpiry = exp * 1000 - Date.now();
+      const refreshIn = msUntilExpiry - 30_000; // 30s before expiry
+
+      if (refreshIn <= 0) {
+        // Already expired or about to — refresh immediately
+        doRefresh();
+        return;
+      }
+
+      refreshTimerRef.current = setTimeout(() => doRefresh(), refreshIn);
     },
-    [scheduleRefresh]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   // -------------------------------------------------------------------------
-  // Refresh the access token using the httpOnly refresh-token cookie
+  // Core refresh logic (with concurrency guard)
   // -------------------------------------------------------------------------
-  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
-        method: "POST",
-        credentials: "include", // sends the httpOnly refresh-token cookie
-      });
+  const doRefresh = useCallback(async (): Promise<string | null> => {
+    // If a refresh is already in-flight, return the same promise
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
 
-      if (!res.ok) {
-        // Refresh token is invalid / expired – clear state
+    const promise = (async (): Promise<string | null> => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          // Any non-ok from /auth/refresh means session is dead
+          clearRefreshTimer();
+          setAccessToken(null);
+          setUser(null);
+          return null;
+        }
+
+        const data: { accessToken: string } = await res.json();
+        setAccessToken(data.accessToken);
+        scheduleRefresh(data.accessToken);
+        return data.accessToken;
+      } catch {
+        clearRefreshTimer();
         setAccessToken(null);
         setUser(null);
         return null;
+      } finally {
+        refreshPromiseRef.current = null;
       }
+    })();
 
-      const data: { accessToken: string } = await res.json();
-      applyToken(data.accessToken);
-      return data.accessToken;
-    } catch {
-      setAccessToken(null);
-      setUser(null);
-      return null;
-    }
-  }, [applyToken]);
+    refreshPromiseRef.current = promise;
+    return promise;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearRefreshTimer, scheduleRefresh]);
 
-  // Named alias used internally to avoid a circular dep warning in the effect
-  const silentRefresh = refreshAccessToken;
+  /** Public alias for consumers (useAuthFetch, etc.) */
+  const refreshAccessToken = doRefresh;
 
   // -------------------------------------------------------------------------
-  // On mount – try to restore session via refresh token cookie
+  // On mount — silent refresh to restore session + hydrate user via /auth/me
   // -------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      await refreshAccessToken();
-      if (!cancelled) setIsLoading(false);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!res.ok) throw new Error("refresh failed");
+
+        const { accessToken: token }: { accessToken: string } =
+          await res.json();
+
+        if (cancelled) return;
+
+        setAccessToken(token);
+        scheduleRefresh(token);
+
+        // Hydrate user from GET /auth/me — never decode from the token
+        const me = await fetchMe(token);
+        if (!cancelled) setUser(me);
+      } catch {
+        if (!cancelled) {
+          setAccessToken(null);
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     })();
 
     return () => {
       cancelled = true;
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      clearRefreshTimer();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // -------------------------------------------------------------------------
   // Login
@@ -138,38 +180,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // server will Set-Cookie the refresh token
+        credentials: "include",
         body: JSON.stringify(credentials),
       });
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
+        const body = await res.json().catch(() => ({}));
         throw new Error(
-          (error as { message?: string }).message ?? "Login failed"
+          (body as { message?: string }).message ?? "Login failed"
         );
       }
 
-      const data: { accessToken: string } = await res.json();
-      applyToken(data.accessToken);
+      const data: { accessToken: string; user: User } = await res.json();
+
+      setAccessToken(data.accessToken);
+      scheduleRefresh(data.accessToken);
+
+      // Hydrate user from GET /auth/me (authoritative source)
+      const me = await fetchMe(data.accessToken);
+      setUser(me);
     },
-    [applyToken]
+    [fetchMe, scheduleRefresh]
   );
 
   // -------------------------------------------------------------------------
-  // Logout
+  // Logout — requires both Bearer token and credentials: "include"
   // -------------------------------------------------------------------------
   const logout = useCallback(async (): Promise<void> => {
     try {
-      await fetch(`${API_BASE}/api/auth/logout`, {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, {
         method: "POST",
-        credentials: "include", // server will clear the refresh-token cookie
+        credentials: "include",
+        headers: accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : undefined,
       });
     } finally {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      clearRefreshTimer();
       setAccessToken(null);
       setUser(null);
     }
-  }, []);
+  }, [accessToken, clearRefreshTimer]);
 
   // -------------------------------------------------------------------------
   // Context value
@@ -187,7 +238,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// ---------------------------------------------------------------------------
-// Internal export so the fetch utility can access the context value
-// ---------------------------------------------------------------------------
 export { AuthContext };

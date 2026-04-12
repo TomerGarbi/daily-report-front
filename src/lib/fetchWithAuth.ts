@@ -3,15 +3,12 @@
  *
  * A thin wrapper around `fetch` that:
  *  1. Attaches the in-memory access token as a Bearer header.
- *  2. On a 401 response, requests a new access token via the refresh endpoint
- *     (the refresh-token httpOnly cookie is sent automatically).
- *  3. Retries the original request once with the new token.
+ *  2. On a 401 response, attempts a silent refresh and retries once.
  *
- * Usage:
- *   const res = await fetchWithAuth(getToken, refreshToken, "/api/reports");
- *
- * Typically you create a pre-bound version inside your components/hooks via
- * the useAuthFetch hook below.
+ * Notes from the API auth guide:
+ *  - `credentials: "include"` is NOT needed for non-auth endpoints.
+ *    The refresh cookie is scoped to `/api/v1/auth` and won't be sent anyway.
+ *  - Only the refresh / login / logout calls need `credentials: "include"`.
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -26,7 +23,6 @@ export async function fetchWithAuth(
 ): Promise<Response> {
   const buildInit = (token: string | null): RequestInit => ({
     ...init,
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init.headers as Record<string, string> | undefined),
