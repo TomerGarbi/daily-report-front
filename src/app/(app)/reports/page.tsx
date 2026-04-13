@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useReports, applyClientFilters } from "@/hooks/useReports";
+import { useReports } from "@/hooks/useReports";
 import { reportsFilterSchema, ReportsFilterValues } from "@/lib/schemas";
 import { ReportsHeader } from "@/components/reports/ReportsHeader";
 import { ReportsFilterBar } from "@/components/reports/ReportsFilterBar";
@@ -17,7 +17,7 @@ import { FullPageSpinner } from "@/components/Spinner";
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 // ---------------------------------------------------------------------------
 // Page
@@ -26,8 +26,6 @@ const PAGE_SIZE = 10;
 export default function ReportsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
-
-  const { reports, isLoading: reportsFetching, error } = useReports();
 
   const [page, setPage] = useState(1);
 
@@ -38,12 +36,33 @@ export default function ReportsPage() {
 
   const filters = form.watch();
 
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); }, [filters.search, filters.dateFrom, filters.dateTo, filters.status]);
+
+  // Build server-side query from filters
+  const serverStatus = filters.status?.length === 1 ? filters.status[0] : undefined;
+
+  const {
+    reports,
+    total,
+    totalPages,
+    isLoading: reportsFetching,
+    error,
+  } = useReports({
+    status: serverStatus,
+    search: filters.search || undefined,
+    createdAfter: filters.dateFrom || undefined,
+    createdBefore: filters.dateTo || undefined,
+    page,
+    limit: PAGE_SIZE,
+  });
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/login");
   }, [authLoading, isAuthenticated, router]);
 
-  // Derive today's report from the full list
+  // Derive today's report from the current page
   const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const todayReport = reports.find(
     (r) => new Date(r.createdAt).toLocaleDateString("en-CA") === todayStr
@@ -59,20 +78,6 @@ export default function ReportsPage() {
     form.reset({ search: "", status: [], dateFrom: "", dateTo: "" });
     setPage(1);
   }
-
-  const total = reports.length;
-
-  // Reset to page 1 whenever the client-side filter values change
-  useEffect(() => { setPage(1); }, [filters.search, filters.dateFrom, filters.dateTo, filters.status]);
-
-  // Client-side filtering via shared applyClientFilters helper
-  const filteredReports = useMemo(
-    () => applyClientFilters(reports, filters),
-    [reports, filters]
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
-  const pagedReports = filteredReports.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (authLoading) {
     return <FullPageSpinner label="טוען דוחות…" />;
@@ -96,7 +101,7 @@ export default function ReportsPage() {
 
         {/* Table */}
         <ReportsTable
-          reports={pagedReports}
+          reports={reports}
           isLoading={reportsFetching}
           error={error ? String(error) : null}
         />
@@ -104,10 +109,7 @@ export default function ReportsPage() {
         {/* Pagination */}
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            {filteredReports.length < total
-              ? `${filteredReports.length} מתוך ${total} דוחות • עמוד ${page} מתוך ${totalPages}`
-              : `${total} דוחות • עמוד ${page} מתוך ${totalPages}`
-            }
+            {`${total} דוחות • עמוד ${page} מתוך ${totalPages}`}
           </span>
           <Pagination
             page={page}

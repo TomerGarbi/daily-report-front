@@ -6,25 +6,9 @@ import { FieldSelect } from "@/components/inputs/FieldSelect";
 import { FieldDatePicker } from "@/components/inputs/FieldDatePicker";
 import type { SelectOption } from "@/components/inputs/FieldSelect";
 import { AlertTriangle } from "lucide-react";
+import type { StationRow, StationData } from "@/types/report";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-export interface StationRow {
-  stationNumber: number;
-  installedCapacity: number;
-  availableCapacity: number;
-  peakCapacity: number;
-  minReserveCapacity: number;
-  secondaryFuelPeakCapacity: number;
-  status: string;
-  startTime?: string;
-  endTime?: string;
-  updatedEndTime?: string;
-  notes?: string;
-}
-
-/** Map of station-group name → rows */
-export type StationData = Record<string, StationRow[]>;
+export type { StationRow, StationData };
 
 interface StationTableProps {
   data: StationData;
@@ -70,21 +54,21 @@ function formatDateTime(iso?: string) {
   });
 }
 
-const COL_HEADERS = [
-  "שם יחידה",
-  "מספר יחידה",
-  "יכולת מותקנת (MW)",
-  "יכולת זמינה כעת (MW)",
-  "יכולת לשעת פסגה (MW)",
-  "יכולת לשעת מינימום רזרבה (MW)",
-  "יכולת זמינה בפסגה בדלק משני (MW)",
-  "התדרדרות ביכולת (MW)",
-  "סטטוס",
-  "זמן התחלה",
-  "זמן סיום",
-  "זמן סיום מעודכן",
-  "הערות",
-] as const;
+const COL_HEADERS: { label: string; sub?: string }[] = [
+  { label: "שם יחידה" },
+  { label: "מספר יחידה" },
+  { label: "יכולת מותקנת", sub: "(MW) | 15°C" },
+  { label: "יכולת זמינה כעת", sub: "(MW)" },
+  { label: "יכולת לשעת פסגה", sub: "(MW)" },
+  { label: "יכולת לשעת מינימום רזרבה", sub: "(MW)" },
+  { label: "יכולת זמינה בפסגה בדלק משני", sub: "(MW)" },
+  { label: "התדרדרות ביכולת", sub: "(MW)" },
+  { label: "סטטוס" },
+  { label: "זמן התחלה" },
+  { label: "זמן סיום" },
+  { label: "זמן סיום מעודכן" },
+  { label: "הערות" },
+];
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
@@ -184,8 +168,6 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
     [data, onChange]
   );
 
-  const errors = useMemo(() => validateStationData(data), [data]);
-
   const groups = Object.keys(data);
 
   return (
@@ -197,15 +179,18 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm" dir="rtl">
+        <table className="w-full text-base" dir="rtl">
           <thead>
             <tr className="bg-orange-500">
               {COL_HEADERS.map((h) => (
                 <th
-                  key={h}
-                  className="px-2 py-2 text-right text-xs font-semibold text-white min-w-[56px]"
+                  key={h.label}
+                  className="px-2 py-2 text-center text-xs font-semibold text-white min-w-[56px]"
                 >
-                  {h}
+                  {h.label}
+                  {h.sub && (
+                    <div className="font-semibold opacity-90 mt-0.5">{h.sub}</div>
+                  )}
                 </th>
               ))}
             </tr>
@@ -224,19 +209,19 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   {rowIdx === 0 && (
                     <td
                       rowSpan={rows.length}
-                      className="px-4 py-3 text-right align-middle font-semibold text-slate-800 bg-slate-50/60 border-l border-slate-200 whitespace-nowrap"
+                      className="px-4 py-3 text-center align-middle font-semibold text-slate-800 bg-slate-50/60 border-l border-slate-200 whitespace-nowrap"
                     >
                       {group}
                     </td>
                   )}
 
                   {/* מספר יחידה — read-only */}
-                  <td className="px-4 py-2 text-right font-medium text-slate-700">
+                  <td className="px-4 py-2 text-center font-medium text-slate-700">
                     {row.stationNumber}
                   </td>
 
                   {/* יכולת מותקנת */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.installedCapacity}</span>
                     ) : (
@@ -248,13 +233,13 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                             installedCapacity: Number(e.target.value),
                           })
                         }
-                        className="h-9 w-28 text-right px-1"
+                        className="h-9 w-28 text-center px-1"
                       />
                     )}
                   </td>
 
                   {/* יכולת זמינה כעת */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.availableCapacity}</span>
                     ) : (
@@ -266,13 +251,13 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                             availableCapacity: Number(e.target.value),
                           })
                         }
-                        className="h-9 w-28 text-right px-1"
+                        className="h-9 w-28 text-center px-1"
                       />
                     )}
                   </td>
 
                   {/* יכולת לשעת פסגה */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.peakCapacity}</span>
                     ) : (
@@ -284,13 +269,13 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                             peakCapacity: Number(e.target.value),
                           })
                         }
-                        className="h-9 w-28 text-right px-1"
+                        className="h-9 w-28 text-center px-1"
                       />
                     )}
                   </td>
 
                   {/* יכולת לשעת מינימום רזרבה */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.minReserveCapacity}</span>
                     ) : (
@@ -302,13 +287,13 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                             minReserveCapacity: Number(e.target.value),
                           })
                         }
-                        className="h-9 w-28 text-right px-1"
+                        className="h-9 w-28 text-center px-1"
                       />
                     )}
                   </td>
 
                   {/* יכולת זמינה בפסגה בדלק משני */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.secondaryFuelPeakCapacity}</span>
                     ) : (
@@ -320,20 +305,20 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                             secondaryFuelPeakCapacity: Number(e.target.value),
                           })
                         }
-                        className="h-9 w-28 text-right px-1"
+                        className="h-9 w-28 text-center px-1"
                       />
                     )}
                   </td>
 
                   {/* התדרדרות ביכולת (computed: מותקנת - זמינה) */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     <span className="px-2 text-slate-700">
                       {(Number(row.installedCapacity) || 0) - (Number(row.availableCapacity) || 0)}
                     </span>
                   </td>
 
                   {/* סטטוס */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span
                         className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${statusColor(row.status)}`}
@@ -353,7 +338,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   </td>
 
                   {/* זמן התחלה */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-500">{formatDateTime(row.startTime)}</span>
                     ) : (
@@ -371,7 +356,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   </td>
 
                   {/* זמן סיום */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-500">{formatDateTime(row.endTime)}</span>
                     ) : (
@@ -389,7 +374,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   </td>
 
                   {/* זמן סיום מעודכן */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-500">{formatDateTime(row.updatedEndTime)}</span>
                     ) : (
@@ -407,7 +392,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   </td>
 
                   {/* הערות */}
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-500">{row.notes ?? "—"}</span>
                     ) : (
@@ -417,7 +402,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                         onChange={(e) =>
                           updateRow(group, rowIdx, { notes: e.target.value })
                         }
-                        className="h-9 w-32 text-right"
+                        className="h-9 w-56 text-center"
                         placeholder="הערות..."
                       />
                     )}
@@ -429,7 +414,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
         </table>
       </div>
     </div>
-    {!readOnly && <ValidationPanel errors={errors} />}
+
     </div>
   );
 }

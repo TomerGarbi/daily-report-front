@@ -6,7 +6,7 @@
  * Mutation functions receive a pre-bound `authFetch` and return typed data.
  */
 
-import { Report, ReportsResponse, ReportStatus } from "@/types/report";
+import { Report, ReportsResponse, ReportStatus, ReportContent } from "@/types/report";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ export interface CreateReportPayload {
   description?: string;
   group?: string;
   status?: ReportStatus;
-  content: Record<string, unknown>;
+  content: ReportContent;
 }
 
 export interface UpdateReportPayload extends Partial<CreateReportPayload> {}
@@ -36,17 +36,24 @@ export interface ApiError extends Error {
 // ─── URL builders ─────────────────────────────────────────────────────────────
 
 export interface ReportsQueryParams {
-  /** Backend only supports a single status value. Pass undefined to get all. */
   status?: "draft" | "published";
-  limit?: number;
+  search?: string;
+  author?: string;
+  createdAfter?: string;
+  createdBefore?: string;
   page?: number;
+  limit?: number;
 }
 
 export function buildReportsUrl(params: ReportsQueryParams = {}): string {
   const q = new URLSearchParams();
-  if (params.status)              q.set("status", params.status);
-  if (params.limit  != null)      q.set("limit",  String(params.limit));
-  if (params.page   != null)      q.set("page",   String(params.page));
+  if (params.status)                    q.set("status", params.status);
+  if (params.search)                    q.set("search", params.search);
+  if (params.author)                    q.set("author", params.author);
+  if (params.createdAfter)              q.set("createdAfter", params.createdAfter);
+  if (params.createdBefore)             q.set("createdBefore", params.createdBefore);
+  if (params.page   != null)            q.set("page",  String(params.page));
+  if (params.limit  != null)            q.set("limit", String(params.limit));
   return `/api/v1/reports?${q.toString()}`;
 }
 
@@ -76,6 +83,32 @@ export function parseReportsList(json: unknown): Report[] {
   }
 
   return list.map(normalizeReport);
+}
+
+/** Parse the full paginated response from the reports endpoint. */
+export interface PaginatedReports {
+  reports: Report[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+export function parsePaginatedReports(json: unknown): PaginatedReports {
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const obj = json as Record<string, unknown>;
+    return {
+      reports:     parseReportsList(json),
+      total:       typeof obj.total === "number" ? obj.total : 0,
+      page:        typeof obj.page === "number" ? obj.page : 1,
+      limit:       typeof obj.limit === "number" ? obj.limit : 20,
+      totalPages:  typeof obj.totalPages === "number" ? obj.totalPages : 1,
+      hasNextPage: typeof obj.hasNextPage === "boolean" ? obj.hasNextPage : false,
+    };
+  }
+  const list = parseReportsList(json);
+  return { reports: list, total: list.length, page: 1, limit: list.length, totalPages: 1, hasNextPage: false };
 }
 
 /** Full SWR fetcher: calls the URL with authFetch, throws on non-OK, returns normalised list. */

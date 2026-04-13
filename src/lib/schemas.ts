@@ -58,23 +58,37 @@ export type ReportsFilterValues = z.input<typeof reportsFilterSchema>;
 // Create / Edit report schema
 // ---------------------------------------------------------------------------
 
+const stationStatusValues = ["Active", "Inactive", "Maintenance"] as const;
+
+export const stationRowSchema = z.object({
+  stationNumber:             z.number().int().min(1, "מספר יחידה חייב להיות חיובי"),
+  installedCapacity:         z.number().min(0, "יכולת מותקנת לא יכולה להיות שלילית"),
+  availableCapacity:         z.number().min(0, "יכולת זמינה לא יכולה להיות שלילית"),
+  peakCapacity:              z.number().min(0, "יכולת פסגה לא יכולה להיות שלילית"),
+  minReserveCapacity:        z.number().min(0, "יכולת מינימום רזרבה לא יכולה להיות שלילית"),
+  secondaryFuelPeakCapacity: z.number().min(0, "יכולת דלק משני לא יכולה להיות שלילית"),
+  status:                    z.enum(stationStatusValues, { error: "סטטוס לא חוקי" }),
+  startTime:                 z.string().optional(),
+  endTime:                   z.string().optional(),
+  updatedEndTime:            z.string().optional(),
+  notes:                     z.string().optional(),
+});
+
+export const stationDataSchema = z.record(z.string(), z.array(stationRowSchema).min(1));
+
+export const reportContentSchema = z.object({
+  stationData:   stationDataSchema,
+  gasData:       stationDataSchema,
+  renewableData: stationDataSchema,
+  electricData:  stationDataSchema,
+});
+
 export const createReportSchema = z.object({
   title:       requiredString("כותרת"),
   description: z.string().optional(),
   group:       z.string(),
   status:      z.enum(reportStatusValues, { error: "סטטוס לא חוקי" }),
-
-  content:     z
-    .string()
-    .optional()
-    .refine(
-      (val) => {
-        if (!val || val.trim() === "") return true;
-        try { JSON.parse(val); return true; }
-        catch { return false; }
-      },
-      { message: "תוכן חייב להיות JSON תקין" }
-    ),
+  content:     reportContentSchema,
 });
 
 export type CreateReportValues = z.infer<typeof createReportSchema>;

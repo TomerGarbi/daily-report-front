@@ -18,8 +18,10 @@
       "required": [
         "stationNumber",
         "installedCapacity",
-        "currentCapacity",
-        "degradingCapacity",
+        "availableCapacity",
+        "peakCapacity",
+        "minReserveCapacity",
+        "secondaryFuelPeakCapacity",
         "status"
       ],
       "properties": {
@@ -33,15 +35,25 @@
           "minimum": 0,
           "description": "Installed (nameplate) capacity in MW."
         },
-        "currentCapacity": {
+        "availableCapacity": {
           "type": "number",
           "minimum": 0,
           "description": "Current available capacity in MW."
         },
-        "degradingCapacity": {
+        "peakCapacity": {
           "type": "number",
           "minimum": 0,
-          "description": "Capacity lost due to degradation in MW."
+          "description": "Available capacity at peak hour in MW."
+        },
+        "minReserveCapacity": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Available capacity at minimum reserve hour in MW."
+        },
+        "secondaryFuelPeakCapacity": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Available capacity at peak hour using secondary fuel in MW."
         },
         "status": {
           "type": "string",
@@ -52,6 +64,20 @@
           "type": "string",
           "format": "date-time",
           "description": "ISO-8601 timestamp of when the unit started. Optional — omitted if the unit is not running."
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of when the unit is expected to stop."
+        },
+        "updatedEndTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 updated end time if the original end time changed."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-text notes about this unit."
         }
       },
       "additionalProperties": false

@@ -3,12 +3,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save } from "lucide-react";
+import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList } from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
 import { StationTable } from "@/components/StationTable/StationTable";
-import type { StationData } from "@/components/StationTable/StationTable";
+import type { StationData } from "@/types/report";
 import { Button } from "@/components/ui/button";
+import { useReportMutations } from "@/hooks/useReports";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 // ─── Fake station data ──────────────────────────────────────────────────────
 
@@ -26,7 +29,7 @@ const INITIAL_STATIONS: StationData = {
     { stationNumber: 1, installedCapacity: 700, availableCapacity: 700, peakCapacity: 690, minReserveCapacity: 650, secondaryFuelPeakCapacity: 500, status: "Active", startTime: "2026-02-25T22:00:00Z" },
     { stationNumber: 2, installedCapacity: 700, availableCapacity: 680, peakCapacity: 670, minReserveCapacity: 630, secondaryFuelPeakCapacity: 480, status: "Active", startTime: "2026-02-26T05:00:00Z" },
     { stationNumber: 3, installedCapacity: 700, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-    { stationNumber: 4, installedCapacity: 700, availableCapacity: 690, peakCapacity: 685, minReserveCapacity: 640, secondaryFuelPeakCapacity: 490, status: "Active", startTime: "2026-02-26T04:30:00Z" },
+    { stationNumber: 4, installedCapacity: 700, availableCapacity: 690, peakCapacity: 685, minReserveCapacity: 640, secondaryFuelPeakCapacity: 490, status: "Active", startTime: "f2026-02-26T04:30:00Z" },
   ],
   "Eshkol Power": [
     { stationNumber: 1, installedCapacity: 450, availableCapacity: 430, peakCapacity: 420, minReserveCapacity: 380, secondaryFuelPeakCapacity: 300, status: "Active", startTime: "2026-02-26T09:00:00Z" },
@@ -84,13 +87,15 @@ function getDayDescription() {
 
 // ─── Section definitions ────────────────────────────────────────────────────
 
-const SECTION_IDS = ["content", "electric", "review"] as const;
+const SECTION_IDS = ["content", "electric", "additional", "review"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function NewReportPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { createReport } = useReportMutations();
 
   const [title, setTitle] = useState(getTodayTitle());
   const [subtitle, setSubtitle] = useState(getDayDescription());
@@ -99,10 +104,52 @@ export default function NewReportPage() {
   const [gasData, setGasData] = useState<StationData>(INITIAL_GAS_STATIONS);
   const [renewableData, setRenewableData] = useState<StationData>(INITIAL_RENEWABLE_STATIONS);
   const [electricData, setElectricData] = useState<StationData>(INITIAL_ELECTRIC_STATIONS);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSave() {
+    setIsSaving(true);
+    try {
+      const payload = {
+        title,
+        description: subtitle,
+        group: user?.groups?.[0] ?? "",
+        status: "published" as const,
+        content: { stationData, gasData, renewableData, electricData },
+      };
+      console.log("[SaveReport] payload:", payload);
+      await createReport(payload);
+      toast.success("הדוח נשמר בהצלחה");
+      router.push("/reports");
+    } catch (err: unknown) {
+      console.error("[SaveReport] error:", err);
+      const apiErr = err as { message?: string; status?: number; body?: Record<string, unknown> };
+      console.error("[SaveReport] status:", apiErr.status);
+      console.error("[SaveReport] body:", apiErr.body);
+
+      // Extract field-level validation errors if present
+      const errors = apiErr.body?.errors;
+      if (Array.isArray(errors)) {
+        const details = errors
+          .map((e: { field?: string; message?: string }) => `${e.field ?? "?"}: ${e.message ?? "שגיאה"}`)
+          .join("\n");
+        toast.error(`שגיאת ולידציה:\n${details}`);
+      } else if (typeof errors === "object" && errors !== null) {
+        const details = Object.entries(errors as Record<string, string>)
+          .map(([field, msg]) => `${field}: ${msg}`)
+          .join("\n");
+        toast.error(`שגיאת ולידציה:\n${details}`);
+      } else {
+        toast.error(apiErr.message ?? "שגיאה בשמירת הדוח");
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const sections: StepperSection[] = [
     { id: "content", label: "יחידות פרטיות", icon: LayoutList },
     { id: "electric", label: "חברת חשמל", icon: Zap },
+    { id: "additional", label: "נתונים נוספים", icon: ClipboardList },
     { id: "review", label: "סיכום ואישור", icon: CheckCircle2 },
   ];
 
@@ -146,6 +193,25 @@ export default function NewReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
+              <Button size="lg" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8">
+                <span>נתונים נוספים</span>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "additional" && (
+          <div className="space-y-8">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 text-center text-slate-500">
+              נתונים נוספים — בקרוב
+            </div>
+
+            <div className="flex justify-between">
+              <Button size="lg" variant="outline" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לחברת חשמל</span>
+              </Button>
               <Button size="lg" onClick={() => setActiveSection("review")} className="gap-2 text-base px-8">
                 <span>סיכום ואישור</span>
                 <ArrowLeft className="h-5 w-5" />
@@ -156,31 +222,29 @@ export default function NewReportPage() {
 
         {activeSection === "review" && (
           <div className="space-y-8">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 text-center text-slate-500">
-              סיכום ואישור — בקרוב
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 space-y-4" dir="rtl">
+              <h3 className="text-lg font-semibold text-slate-800">סיכום הדוח</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
+                <div><span className="font-medium">כותרת: </span>{title}</div>
+                <div><span className="font-medium">תיאור: </span>{subtitle}</div>
+                <div><span className="font-medium">קבוצה: </span>{user?.groups?.[0] ?? "—"}</div>
+                <div><span className="font-medium">סטטוס: </span>פורסם</div>
+              </div>
             </div>
 
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+              <Button size="lg" variant="outline" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8" disabled={isSaving}>
                 <ArrowRight className="h-5 w-5" />
-                <span>חזרה לחברת חשמל</span>
+                <span>חזרה לנתונים נוספים</span>
               </Button>
               <Button
                 size="lg"
-                onClick={() => {
-                  console.log("Report data:", {
-                    title,
-                    subtitle,
-                    stationData,
-                    gasData,
-                    renewableData,
-                    electricData,
-                  });
-                }}
+                onClick={handleSave}
+                disabled={isSaving}
                 className="gap-2 text-base px-8"
               >
                 <Save className="h-5 w-5" />
-                <span>שמור דוח</span>
+                <span>{isSaving ? "שומר..." : "שמור דוח"}</span>
               </Button>
             </div>
           </div>

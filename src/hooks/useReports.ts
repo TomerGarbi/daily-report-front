@@ -17,6 +17,7 @@ import { Report, ReportStatus } from "@/types/report";
 import {
   buildReportsUrl,
   parseReportsList,
+  parsePaginatedReports,
   REPORTS_STATS_URL,
   createReport as apiCreateReport,
   updateReport as apiUpdateReport,
@@ -24,6 +25,8 @@ import {
   type ReportStats,
   type CreateReportPayload,
   type UpdateReportPayload,
+  type ReportsQueryParams,
+  type PaginatedReports,
 } from "@/lib/api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
@@ -31,38 +34,50 @@ import { useAuthFetch } from "@/hooks/useAuthFetch";
 // ─── useReports ───────────────────────────────────────────────────────────────
 
 export interface UseReportsOptions {
-  /** Only pass when you want to send a single status to the backend. */
   status?: ReportStatus;
+  search?: string;
+  author?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  page?: number;
   limit?: number;
 }
 
 export interface UseReportsReturn {
   reports: Report[];
+  total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
   isLoading: boolean;
   error: Error | undefined;
-  mutate: KeyedMutator<Report[]>;
+  mutate: KeyedMutator<unknown>;
 }
 
 export function useReports(options: UseReportsOptions = {}): UseReportsReturn {
-  const { status, limit = 100 } = options;
+  const { status, search, author, createdAfter, createdBefore, page = 1, limit = 20 } = options;
 
   const url = useMemo(
-    () => buildReportsUrl({ status, limit }),
-    [status, limit]
+    () => buildReportsUrl({ status, search, author, createdAfter, createdBefore, page, limit }),
+    [status, search, author, createdAfter, createdBefore, page, limit]
   );
 
   const { data, isLoading, error, mutate } = useAuthSWR<unknown>(url);
 
-  const reports: Report[] = useMemo(
-    () => (data !== undefined ? parseReportsList(data) : []),
+  const parsed: PaginatedReports = useMemo(
+    () => (data !== undefined ? parsePaginatedReports(data) : { reports: [], total: 0, page: 1, limit: 20, totalPages: 1, hasNextPage: false }),
     [data]
   );
 
   return {
-    reports,
+    reports: parsed.reports,
+    total: parsed.total,
+    page: parsed.page,
+    totalPages: parsed.totalPages,
+    hasNextPage: parsed.hasNextPage,
     isLoading,
     error: error as Error | undefined,
-    mutate: mutate as KeyedMutator<Report[]>,
+    mutate,
   };
 }
 
