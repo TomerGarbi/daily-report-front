@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useReports } from "@/hooks/useReports";
+import { useReports, useReportMutations } from "@/hooks/useReports";
 import { reportsFilterSchema, ReportsFilterValues } from "@/lib/schemas";
 import { ReportsHeader } from "@/components/reports/ReportsHeader";
 import { ReportsFilterBar } from "@/components/reports/ReportsFilterBar";
 import { ReportsTable } from "@/components/reports/ReportsTable";
 import { Pagination } from "@/components/Pagination";
 import { FullPageSpinner } from "@/components/Spinner";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -24,20 +25,21 @@ const PAGE_SIZE = 20;
 // ---------------------------------------------------------------------------
 
 export default function ReportsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const router = useRouter();
+  const { deleteReport } = useReportMutations();
 
   const [page, setPage] = useState(1);
 
   const form = useForm<ReportsFilterValues>({
     resolver: zodResolver(reportsFilterSchema) as any,
-    defaultValues: { search: "", status: [], dateFrom: "", dateTo: "" },
+    defaultValues: { search: "", status: [], dateFrom: "", dateTo: "", onlyMine: false },
   });
 
   const filters = form.watch();
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [filters.search, filters.dateFrom, filters.dateTo, filters.status]);
+  useEffect(() => { setPage(1); }, [filters.search, filters.dateFrom, filters.dateTo, filters.status, filters.onlyMine]);
 
   // Build server-side query from filters
   const serverStatus = filters.status?.length === 1 ? filters.status[0] : undefined;
@@ -51,6 +53,7 @@ export default function ReportsPage() {
   } = useReports({
     status: serverStatus,
     search: filters.search || undefined,
+    author: filters.onlyMine && user?.username ? user.username : undefined,
     createdAfter: filters.dateFrom || undefined,
     createdBefore: filters.dateTo || undefined,
     page,
@@ -74,8 +77,21 @@ export default function ReportsPage() {
     setPage(1);
   }
 
+  const handleDelete = useCallback(
+    async (reportId: string) => {
+      try {
+        await deleteReport(reportId);
+        toast.success("הדוח נמחק בהצלחה");
+      } catch (err: unknown) {
+        const apiErr = err as { message?: string };
+        toast.error(apiErr.message ?? "שגיאה במחיקת הדוח");
+      }
+    },
+    [deleteReport],
+  );
+
   function clearFilters() {
-    form.reset({ search: "", status: [], dateFrom: "", dateTo: "" });
+    form.reset({ search: "", status: [], dateFrom: "", dateTo: "", onlyMine: false });
     setPage(1);
   }
 
@@ -104,6 +120,7 @@ export default function ReportsPage() {
           reports={reports}
           isLoading={reportsFetching}
           error={error ? String(error) : null}
+          onDelete={handleDelete}
         />
 
         {/* Pagination */}

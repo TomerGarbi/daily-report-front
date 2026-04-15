@@ -4,7 +4,7 @@ import { UseFormReturn } from "react-hook-form";
 import { ReportsFilterValues } from "@/lib/schemas";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import { FieldText, FieldMultiSelect, FieldDatePicker } from "@/components/inputs";
+import { FieldText, FieldMultiSelect, FieldDatePicker, FieldCheckbox } from "@/components/inputs";
 import { Search } from "lucide-react";
 
 interface ReportsFilterBarProps {
@@ -102,6 +102,23 @@ export function ReportsFilterBar({ form, onSubmit, onClear }: ReportsFilterBarPr
                     )
                   }
                   error={fieldState.error?.message}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {/* Only mine */}
+        <FormField
+          control={form.control}
+          name="onlyMine"
+          render={({ field }) => (
+            <FormItem className="flex items-center self-center">
+              <FormControl>
+                <FieldCheckbox
+                  label="הדוחות שלי"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
                 />
               </FormControl>
             </FormItem>

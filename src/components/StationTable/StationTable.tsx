@@ -170,6 +170,24 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
 
   const groups = Object.keys(data);
 
+  const totals = useMemo(() => {
+    let installed = 0;
+    let available = 0;
+    let peak = 0;
+    let minReserve = 0;
+    let secondaryFuel = 0;
+    for (const rows of Object.values(data)) {
+      for (const row of rows) {
+        installed += Number(row.installedCapacity) || 0;
+        available += Number(row.availableCapacity) || 0;
+        peak += Number(row.peakCapacity) || 0;
+        minReserve += Number(row.minReserveCapacity) || 0;
+        secondaryFuel += Number(row.secondaryFuelPeakCapacity) || 0;
+      }
+    }
+    return { installed, available, peak, minReserve, secondaryFuel, degradation: installed - available };
+  }, [data]);
+
   return (
     <div className="space-y-3">
     <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
@@ -411,6 +429,18 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
               ));
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-orange-300 font-bold" style={{ backgroundColor: "#FFEDD5", color: "#C2410C" }}>
+              <td colSpan={2} className="px-4 py-2 text-center text-sm">סה״כ</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.installed}</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.available}</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.peak}</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.minReserve}</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.secondaryFuel}</td>
+              <td className="px-2 py-2 text-center text-sm">{totals.degradation}</td>
+              <td colSpan={5} />
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

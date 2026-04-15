@@ -90,6 +90,7 @@ export function ReportsTable({
                 <TableCell>
                   <ReportRowActions
                     reportId={report._id ?? report.id}
+                    reportAuthor={report.createdBy?.username}
                     onDelete={onDelete}
                   />
                 </TableCell>

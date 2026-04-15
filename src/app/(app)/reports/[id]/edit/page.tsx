@@ -1,89 +1,17 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList, FileDown } from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
 import { StationTable } from "@/components/StationTable/StationTable";
 import type { StationData } from "@/types/report";
 import { Button } from "@/components/ui/button";
-import { useReportMutations } from "@/hooks/useReports";
+import { useReport, useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
+import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
-
-// ─── Fake station data ──────────────────────────────────────────────────────
-
-const INITIAL_STATIONS: StationData = {
-  "Haifa Power": [
-    { stationNumber: 1, installedCapacity: 500, availableCapacity: 450, peakCapacity: 440, minReserveCapacity: 400, secondaryFuelPeakCapacity: 300, status: "Active", startTime: "2026-02-26T08:00:00Z" },
-    { stationNumber: 2, installedCapacity: 500, availableCapacity: 480, peakCapacity: 470, minReserveCapacity: 420, secondaryFuelPeakCapacity: 350, status: "Active" },
-    { stationNumber: 3, installedCapacity: 350, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Inactive" },
-  ],
-  "Ashdod Power": [
-    { stationNumber: 1, installedCapacity: 600, availableCapacity: 600, peakCapacity: 590, minReserveCapacity: 550, secondaryFuelPeakCapacity: 400, status: "Active", startTime: "2026-02-26T06:30:00Z" },
-    { stationNumber: 2, installedCapacity: 600, availableCapacity: 550, peakCapacity: 540, minReserveCapacity: 500, secondaryFuelPeakCapacity: 380, status: "Active", startTime: "2026-02-26T07:15:00Z" },
-  ],
-  "Orot Rabin": [
-    { stationNumber: 1, installedCapacity: 700, availableCapacity: 700, peakCapacity: 690, minReserveCapacity: 650, secondaryFuelPeakCapacity: 500, status: "Active", startTime: "2026-02-25T22:00:00Z" },
-    { stationNumber: 2, installedCapacity: 700, availableCapacity: 680, peakCapacity: 670, minReserveCapacity: 630, secondaryFuelPeakCapacity: 480, status: "Active", startTime: "2026-02-26T05:00:00Z" },
-    { stationNumber: 3, installedCapacity: 700, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-    { stationNumber: 4, installedCapacity: 700, availableCapacity: 690, peakCapacity: 685, minReserveCapacity: 640, secondaryFuelPeakCapacity: 490, status: "Active", startTime: "f2026-02-26T04:30:00Z" },
-  ],
-  "Eshkol Power": [
-    { stationNumber: 1, installedCapacity: 450, availableCapacity: 430, peakCapacity: 420, minReserveCapacity: 380, secondaryFuelPeakCapacity: 300, status: "Active", startTime: "2026-02-26T09:00:00Z" },
-  ],
-};
-
-const INITIAL_GAS_STATIONS: StationData = {
-  "Dalia Gas": [
-    { stationNumber: 1, installedCapacity: 800, availableCapacity: 780, peakCapacity: 770, minReserveCapacity: 720, secondaryFuelPeakCapacity: 600, status: "Active", startTime: "2026-02-26T06:00:00Z" },
-    { stationNumber: 2, installedCapacity: 800, availableCapacity: 750, peakCapacity: 740, minReserveCapacity: 700, secondaryFuelPeakCapacity: 580, status: "Active", startTime: "2026-02-26T06:45:00Z" },
-  ],
-  "Ramat Hovav Gas": [
-    { stationNumber: 1, installedCapacity: 400, availableCapacity: 400, peakCapacity: 395, minReserveCapacity: 370, secondaryFuelPeakCapacity: 280, status: "Active", startTime: "2026-02-26T05:00:00Z" },
-    { stationNumber: 2, installedCapacity: 400, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-  ],
-};
-
-const INITIAL_RENEWABLE_STATIONS: StationData = {
-  "Ashalim Solar": [
-    { stationNumber: 1, installedCapacity: 121, availableCapacity: 110, peakCapacity: 105, minReserveCapacity: 90, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T07:30:00Z" },
-  ],
-  "Halutziot Wind": [
-    { stationNumber: 1, installedCapacity: 200, availableCapacity: 180, peakCapacity: 175, minReserveCapacity: 150, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T04:00:00Z" },
-    { stationNumber: 2, installedCapacity: 200, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Inactive" },
-  ],
-  "Ketura Sun": [
-    { stationNumber: 1, installedCapacity: 80, availableCapacity: 75, peakCapacity: 72, minReserveCapacity: 60, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T08:00:00Z" },
-  ],
-};
-
-const INITIAL_ELECTRIC_STATIONS: StationData = {
-  "תחנת רוטנברג": [
-    { stationNumber: 1, installedCapacity: 560, availableCapacity: 540, peakCapacity: 530, minReserveCapacity: 500, secondaryFuelPeakCapacity: 400, status: "Active", startTime: "2026-02-26T05:30:00Z" },
-    { stationNumber: 2, installedCapacity: 560, availableCapacity: 520, peakCapacity: 510, minReserveCapacity: 480, secondaryFuelPeakCapacity: 380, status: "Active", startTime: "2026-02-26T06:00:00Z" },
-    { stationNumber: 3, installedCapacity: 560, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-  ],
-  "תחנת רדינג": [
-    { stationNumber: 1, installedCapacity: 350, availableCapacity: 340, peakCapacity: 335, minReserveCapacity: 310, secondaryFuelPeakCapacity: 250, status: "Active", startTime: "2026-02-26T07:00:00Z" },
-    { stationNumber: 2, installedCapacity: 350, availableCapacity: 350, peakCapacity: 345, minReserveCapacity: 320, secondaryFuelPeakCapacity: 260, status: "Active", startTime: "2026-02-26T04:45:00Z" },
-  ],
-};
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getTodayTitle() {
-  const d = new Date();
-  return `דוח יומי - ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-const DAY_NAMES_HE = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "שבת"];
-
-function getDayDescription() {
-  return `דוח יומי ל${DAY_NAMES_HE[new Date().getDay()]}`;
-}
 
 // ─── Section definitions ────────────────────────────────────────────────────
 
@@ -92,19 +20,35 @@ type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
-export default function NewReportPage() {
+export default function EditReportPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { createReport } = useReportMutations();
+  const { report, isLoading: reportLoading, error: reportError } = useReport(id);
+  const { updateReport } = useReportMutations();
 
-  const [title, setTitle] = useState(getTodayTitle());
-  const [subtitle, setSubtitle] = useState(getDayDescription());
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [activeSection, setActiveSection] = useState<SectionId>("content");
-  const [stationData, setStationData] = useState<StationData>(INITIAL_STATIONS);
-  const [gasData, setGasData] = useState<StationData>(INITIAL_GAS_STATIONS);
-  const [renewableData, setRenewableData] = useState<StationData>(INITIAL_RENEWABLE_STATIONS);
-  const [electricData, setElectricData] = useState<StationData>(INITIAL_ELECTRIC_STATIONS);
+  const [stationData, setStationData] = useState<StationData>({});
+  const [gasData, setGasData] = useState<StationData>({});
+  const [renewableData, setRenewableData] = useState<StationData>({});
+  const [electricData, setElectricData] = useState<StationData>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  // ── Populate state from fetched report ────────────────────────────────
+  useEffect(() => {
+    if (report && !initialized) {
+      setTitle(report.title);
+      setSubtitle(report.description);
+      setStationData(report.content?.stationData ?? {});
+      setGasData(report.content?.gasData ?? {});
+      setRenewableData(report.content?.renewableData ?? {});
+      setElectricData(report.content?.electricData ?? {});
+      setInitialized(true);
+    }
+  }, [report, initialized]);
 
   // ── Warn on refresh / tab close ───────────────────────────────────────
   useEffect(() => {
@@ -123,19 +67,15 @@ export default function NewReportPage() {
         const payload = {
           title,
           description: subtitle,
-          group: user?.groups?.[0] ?? "",
           status,
           content: { stationData, gasData, renewableData, electricData },
         };
-        console.log("[SaveReport] payload:", payload);
-        await createReport(payload);
-        toast.success(status === "draft" ? "הדוח נשמר כטיוטה" : "הדוח נשמר בהצלחה");
+        await updateReport(id, payload);
+        toast.success(status === "draft" ? "הדוח עודכן כטיוטה" : "הדוח עודכן בהצלחה");
         router.push("/reports");
       } catch (err: unknown) {
-        console.error("[SaveReport] error:", err);
+        console.error("[EditReport] error:", err);
         const apiErr = err as { message?: string; status?: number; body?: Record<string, unknown> };
-        console.error("[SaveReport] status:", apiErr.status);
-        console.error("[SaveReport] body:", apiErr.body);
 
         const errors = apiErr.body?.errors;
         if (Array.isArray(errors)) {
@@ -149,14 +89,50 @@ export default function NewReportPage() {
             .join("\n");
           toast.error(`שגיאת ולידציה:\n${details}`);
         } else {
-          toast.error(apiErr.message ?? "שגיאה בשמירת הדוח");
+          toast.error(apiErr.message ?? "שגיאה בעדכון הדוח");
         }
       } finally {
         setIsSaving(false);
       }
     },
-    [title, subtitle, user, stationData, gasData, renewableData, electricData, createReport, router],
+    [id, title, subtitle, stationData, gasData, renewableData, electricData, updateReport, router],
   );
+
+  // ── Loading / error states ────────────────────────────────────────────
+  if (reportLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Spinner size="lg" label="טוען דוח לעריכה…" />
+      </div>
+    );
+  }
+
+  if (reportError || !report) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4" dir="rtl">
+        <p className="text-red-600 text-lg">
+          {reportError?.message ?? "הדוח לא נמצא"}
+        </p>
+        <Button variant="outline" onClick={() => router.push("/reports")}>
+          חזרה לדוחות
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Authorization: only owner, manager, or admin may edit ─────────────
+  const isOwner = user?.username === report.createdBy?.username;
+  const isPrivileged = user?.role === "manager" || user?.role === "admin";
+  if (!isOwner && !isPrivileged) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4" dir="rtl">
+        <p className="text-red-600 text-lg">אין לך הרשאה לערוך דוח זה</p>
+        <Button variant="outline" onClick={() => router.push("/reports")}>
+          חזרה לדוחות
+        </Button>
+      </div>
+    );
+  }
 
   const sections: StepperSection[] = [
     { id: "content", label: "יחידות פרטיות", icon: LayoutList },
@@ -273,8 +249,8 @@ export default function NewReportPage() {
               <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
                 <div><span className="font-medium">כותרת: </span>{title}</div>
                 <div><span className="font-medium">תיאור: </span>{subtitle}</div>
-                <div><span className="font-medium">קבוצה: </span>{user?.groups?.[0] ?? "—"}</div>
-                <div><span className="font-medium">סטטוס: </span>פורסם</div>
+                <div><span className="font-medium">קבוצה: </span>{report.group ?? "—"}</div>
+                <div><span className="font-medium">סטטוס: </span>{report.status === "published" ? "פורסם" : "טיוטה"}</div>
               </div>
             </div>
 

@@ -50,6 +50,7 @@ export const reportsFilterSchema = z.object({
   status:   z.array(z.enum(reportStatusValues)).default([]),
   dateFrom: z.string().optional(),
   dateTo:   z.string().optional(),
+  onlyMine: z.boolean().default(false),
 });
 
 export type ReportsFilterValues = z.input<typeof reportsFilterSchema>;

@@ -14,6 +14,7 @@ import {
   BarChart2,
   CheckCircle2,
   ListTodo,
+  ShieldCheck,
 } from "lucide-react";
 import { FullPageSpinner } from "@/components/Spinner";
 
@@ -70,24 +71,24 @@ export default function Home() {
               isLoading={statsLoading}
             />
             <StatCard
-              label="החודש"
-              value={stats?.thisMonth}
+              label="30 ימים אחרונים"
+              value={stats?.recent?.last30Days}
               icon={BarChart2}
               iconColor="bg-violet-100 text-violet-600"
               accentClass="bg-violet-400"
               isLoading={statsLoading}
             />
             <StatCard
-              label="השבוע"
-              value={stats?.thisWeek}
+              label="7 ימים אחרונים"
+              value={stats?.recent?.last7Days}
               icon={CalendarDays}
               iconColor="bg-emerald-100 text-emerald-600"
               accentClass="bg-emerald-400"
               isLoading={statsLoading}
             />
             <StatCard
-              label="ממתינים"
-              value={stats?.pending}
+              label="טיוטות"
+              value={stats?.byStatus?.draft}
               icon={CheckCircle2}
               iconColor="bg-amber-100 text-amber-600"
               accentClass="bg-amber-400"
@@ -145,6 +146,17 @@ export default function Home() {
               shadow="rgba(219,39,119,0.2)"
               darkText
             />
+            {user?.role === "admin" && (
+              <ActionButton
+                href="/admin"
+                label="ניהול מערכת"
+                description="ממשק מנהלים"
+                icon={ShieldCheck}
+                colors={["#fce4ec", "#f48fb1"]}
+                shadow="rgba(233,30,99,0.2)"
+                darkText
+              />
+            )}
           </div>
         </section>
 

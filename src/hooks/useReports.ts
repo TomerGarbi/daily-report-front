@@ -16,6 +16,7 @@ import { useSWRConfig, KeyedMutator } from "swr";
 import { Report, ReportStatus } from "@/types/report";
 import {
   buildReportsUrl,
+  normalizeReport,
   parseReportsList,
   parsePaginatedReports,
   REPORTS_STATS_URL,
@@ -30,6 +31,20 @@ import {
 } from "@/lib/api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
+
+// ─── useReport (single) ──────────────────────────────────────────────────────
+
+export function useReport(id: string | null) {
+  const { data, isLoading, error } = useAuthSWR<Report>(
+    id ? `/api/v1/reports/${id}` : null,
+  );
+
+  return {
+    report: data ? normalizeReport(data) : null,
+    isLoading,
+    error: error as Error | undefined,
+  };
+}
 
 // ─── useReports ───────────────────────────────────────────────────────────────
 

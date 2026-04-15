@@ -12,10 +12,11 @@ import { Report, ReportsResponse, ReportStatus, ReportContent } from "@/types/re
 
 export interface ReportStats {
   total?: number;
-  thisMonth?: number;
-  thisWeek?: number;
-  pending?: number;
-  [key: string]: unknown;
+  byStatus?: { draft?: number; published?: number };
+  mine?: { total?: number; draft?: number; published?: number };
+  recent?: { last7Days?: number; last30Days?: number };
+  dailyCounts?: { date: string; count: number }[];
+  topAuthors?: { username: string; count: number }[];
 }
 
 export interface CreateReportPayload {
@@ -162,14 +163,14 @@ export async function createReport(
   return normalizeReport(json as Report);
 }
 
-/** PUT /api/v1/reports/:id — update an existing report. */
+/** PATCH /api/v1/reports/:id — update an existing report. */
 export async function updateReport(
   authFetch: AuthFetchFn,
   id: string,
   payload: UpdateReportPayload,
 ): Promise<Report> {
   const res = await authFetch(`/api/v1/reports/${id}`, {
-    method: "PUT",
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

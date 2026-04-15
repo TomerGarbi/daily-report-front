@@ -28,7 +28,7 @@ export function FieldCheckbox({
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <CheckboxPrimitive.Root
           id={id}
           checked={checked}
@@ -36,7 +36,7 @@ export function FieldCheckbox({
           disabled={disabled}
           required={required}
           className={cn(
-            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 bg-white outline-none",
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 bg-white outline-none",
             "transition-colors duration-150",
             "focus-visible:ring-2 focus-visible:ring-orange-200",
             "data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500",
