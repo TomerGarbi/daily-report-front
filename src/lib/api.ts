@@ -206,3 +206,33 @@ export async function deleteReport(
     );
   }
 }
+
+/** Fetch the user's latest report with full content. */
+export async function fetchLatestReport(
+  authFetch: AuthFetchFn,
+): Promise<Report | null> {
+  // Step 1: get the most recent report ID from the list endpoint
+  const listRes = await authFetch("/api/v1/reports?limit=1&sort=-createdAt");
+  if (!listRes.ok) return null;
+  const listJson = await listRes.json();
+  const reports = parseReportsList(listJson);
+  if (reports.length === 0) return null;
+
+  // Step 2: fetch the full report (with content) by ID
+  const id = reports[0].id || reports[0]._id;
+  if (!id) return null;
+  const detailRes = await authFetch(`/api/v1/reports/${id}`);
+  if (!detailRes.ok) return null;
+  const detailJson = await detailRes.json();
+  return normalizeReport(detailJson as Report);
+}
+
+/** GET /api/v1/reports/defaults — fetch default station data from the DB. */
+export async function fetchDefaultStations(
+  authFetch: AuthFetchFn,
+): Promise<ReportContent | null> {
+  const res = await authFetch("/api/v1/reports/defaults");
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json as ReportContent;
+}

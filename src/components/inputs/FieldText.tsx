@@ -8,11 +8,14 @@ export interface FieldTextProps
   hint?: string;
   /** Lucide icon rendered inside the start (right) of the input */
   startIcon?: React.ReactNode;
+  /** Custom background class for the input (default: "bg-white") */
+  bgColor?: string;
 }
 
 const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
-  ({ label, error, hint, startIcon, className, id, required, ...props }, ref) => {
-    const inputId = id ?? React.useId();
+  ({ label, error, hint, startIcon, bgColor = "bg-white", className, id, required, ...props }, ref) => {
+    const generatedId = React.useId();
+    const inputId = id ?? generatedId;
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -36,7 +39,7 @@ const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              "w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none",
+              `w-full rounded-xl border ${bgColor} px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none`,
               "placeholder:text-slate-400",
               "transition-colors duration-150",
               "focus:border-orange-400 focus:ring-2 focus:ring-orange-100",

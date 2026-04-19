@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { FileText, ArrowRight, Calendar, User, Tag, Pencil } from "lucide-react";
 import { useReport } from "@/hooks/useReports";
+import { useAuth } from "@/hooks/useAuth";
 import { StationTable } from "@/components/StationTable/StationTable";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ function hasData(d?: StationData) {
 export default function ReportViewPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const { report, isLoading, error } = useReport(id);
 
   if (isLoading) {
@@ -63,6 +65,11 @@ export default function ReportViewPage() {
   }
 
   const { stationData, gasData, renewableData, electricData } = report.content ?? {};
+
+  const canEdit =
+    user?.role === "manager" ||
+    user?.role === "admin" ||
+    user?.username === report.createdBy?.username;
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
@@ -119,15 +126,28 @@ export default function ReportViewPage() {
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push("/reports")}
-            className="gap-1.5 shrink-0"
-          >
-            <ArrowRight className="h-4 w-4" />
-            חזרה לדוחות
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/reports/${id}/edit`)}
+                className="gap-1.5"
+              >
+                <Pencil className="h-4 w-4" />
+                עריכת דוח
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/reports")}
+              className="gap-1.5"
+            >
+              <ArrowRight className="h-4 w-4" />
+              חזרה לדוחות
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -3,74 +3,26 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList, FileDown } from "lucide-react";
+import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList, FileDown, Copy, Database, FilePlus2 } from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
 import { StationTable } from "@/components/StationTable/StationTable";
-import type { StationData } from "@/types/report";
+import type { StationData, ReportContent } from "@/types/report";
 import { Button } from "@/components/ui/button";
 import { useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthFetch } from "@/hooks/useAuthFetch";
+import { fetchLatestReport, fetchDefaultStations } from "@/lib/api";
+import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
 
-// ─── Fake station data ──────────────────────────────────────────────────────
+// ─── Creation mode types ────────────────────────────────────────────────────
 
-const INITIAL_STATIONS: StationData = {
-  "Haifa Power": [
-    { stationNumber: 1, installedCapacity: 500, availableCapacity: 450, peakCapacity: 440, minReserveCapacity: 400, secondaryFuelPeakCapacity: 300, status: "Active", startTime: "2026-02-26T08:00:00Z" },
-    { stationNumber: 2, installedCapacity: 500, availableCapacity: 480, peakCapacity: 470, minReserveCapacity: 420, secondaryFuelPeakCapacity: 350, status: "Active" },
-    { stationNumber: 3, installedCapacity: 350, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Inactive" },
-  ],
-  "Ashdod Power": [
-    { stationNumber: 1, installedCapacity: 600, availableCapacity: 600, peakCapacity: 590, minReserveCapacity: 550, secondaryFuelPeakCapacity: 400, status: "Active", startTime: "2026-02-26T06:30:00Z" },
-    { stationNumber: 2, installedCapacity: 600, availableCapacity: 550, peakCapacity: 540, minReserveCapacity: 500, secondaryFuelPeakCapacity: 380, status: "Active", startTime: "2026-02-26T07:15:00Z" },
-  ],
-  "Orot Rabin": [
-    { stationNumber: 1, installedCapacity: 700, availableCapacity: 700, peakCapacity: 690, minReserveCapacity: 650, secondaryFuelPeakCapacity: 500, status: "Active", startTime: "2026-02-25T22:00:00Z" },
-    { stationNumber: 2, installedCapacity: 700, availableCapacity: 680, peakCapacity: 670, minReserveCapacity: 630, secondaryFuelPeakCapacity: 480, status: "Active", startTime: "2026-02-26T05:00:00Z" },
-    { stationNumber: 3, installedCapacity: 700, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-    { stationNumber: 4, installedCapacity: 700, availableCapacity: 690, peakCapacity: 685, minReserveCapacity: 640, secondaryFuelPeakCapacity: 490, status: "Active", startTime: "f2026-02-26T04:30:00Z" },
-  ],
-  "Eshkol Power": [
-    { stationNumber: 1, installedCapacity: 450, availableCapacity: 430, peakCapacity: 420, minReserveCapacity: 380, secondaryFuelPeakCapacity: 300, status: "Active", startTime: "2026-02-26T09:00:00Z" },
-  ],
-};
+type CreationMode = "last-report" | "db-defaults" | "scratch";
 
-const INITIAL_GAS_STATIONS: StationData = {
-  "Dalia Gas": [
-    { stationNumber: 1, installedCapacity: 800, availableCapacity: 780, peakCapacity: 770, minReserveCapacity: 720, secondaryFuelPeakCapacity: 600, status: "Active", startTime: "2026-02-26T06:00:00Z" },
-    { stationNumber: 2, installedCapacity: 800, availableCapacity: 750, peakCapacity: 740, minReserveCapacity: 700, secondaryFuelPeakCapacity: 580, status: "Active", startTime: "2026-02-26T06:45:00Z" },
-  ],
-  "Ramat Hovav Gas": [
-    { stationNumber: 1, installedCapacity: 400, availableCapacity: 400, peakCapacity: 395, minReserveCapacity: 370, secondaryFuelPeakCapacity: 280, status: "Active", startTime: "2026-02-26T05:00:00Z" },
-    { stationNumber: 2, installedCapacity: 400, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-  ],
-};
+// ─── Empty station data ─────────────────────────────────────────────────────
 
-const INITIAL_RENEWABLE_STATIONS: StationData = {
-  "Ashalim Solar": [
-    { stationNumber: 1, installedCapacity: 121, availableCapacity: 110, peakCapacity: 105, minReserveCapacity: 90, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T07:30:00Z" },
-  ],
-  "Halutziot Wind": [
-    { stationNumber: 1, installedCapacity: 200, availableCapacity: 180, peakCapacity: 175, minReserveCapacity: 150, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T04:00:00Z" },
-    { stationNumber: 2, installedCapacity: 200, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Inactive" },
-  ],
-  "Ketura Sun": [
-    { stationNumber: 1, installedCapacity: 80, availableCapacity: 75, peakCapacity: 72, minReserveCapacity: 60, secondaryFuelPeakCapacity: 0, status: "Active", startTime: "2026-02-26T08:00:00Z" },
-  ],
-};
-
-const INITIAL_ELECTRIC_STATIONS: StationData = {
-  "תחנת רוטנברג": [
-    { stationNumber: 1, installedCapacity: 560, availableCapacity: 540, peakCapacity: 530, minReserveCapacity: 500, secondaryFuelPeakCapacity: 400, status: "Active", startTime: "2026-02-26T05:30:00Z" },
-    { stationNumber: 2, installedCapacity: 560, availableCapacity: 520, peakCapacity: 510, minReserveCapacity: 480, secondaryFuelPeakCapacity: 380, status: "Active", startTime: "2026-02-26T06:00:00Z" },
-    { stationNumber: 3, installedCapacity: 560, availableCapacity: 0, peakCapacity: 0, minReserveCapacity: 0, secondaryFuelPeakCapacity: 0, status: "Maintenance" },
-  ],
-  "תחנת רדינג": [
-    { stationNumber: 1, installedCapacity: 350, availableCapacity: 340, peakCapacity: 335, minReserveCapacity: 310, secondaryFuelPeakCapacity: 250, status: "Active", startTime: "2026-02-26T07:00:00Z" },
-    { stationNumber: 2, installedCapacity: 350, availableCapacity: 350, peakCapacity: 345, minReserveCapacity: 320, secondaryFuelPeakCapacity: 260, status: "Active", startTime: "2026-02-26T04:45:00Z" },
-  ],
-};
+const EMPTY_STATIONS: StationData = {};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -90,30 +42,115 @@ function getDayDescription() {
 const SECTION_IDS = ["content", "electric", "additional", "review"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
+// ─── Mode Selection Card ────────────────────────────────────────────────────
+
+function ModeCard({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  disabled,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white p-8 shadow-sm transition-all hover:border-orange-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:shadow-sm"
+    >
+      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+        <Icon className="h-7 w-7" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      </div>
+    </button>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function NewReportPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const authFetch = useAuthFetch();
   const { createReport } = useReportMutations();
+
+  // Mode selection state
+  const [mode, setMode] = useState<CreationMode | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   const [title, setTitle] = useState(getTodayTitle());
   const [subtitle, setSubtitle] = useState(getDayDescription());
   const [activeSection, setActiveSection] = useState<SectionId>("content");
-  const [stationData, setStationData] = useState<StationData>(INITIAL_STATIONS);
-  const [gasData, setGasData] = useState<StationData>(INITIAL_GAS_STATIONS);
-  const [renewableData, setRenewableData] = useState<StationData>(INITIAL_RENEWABLE_STATIONS);
-  const [electricData, setElectricData] = useState<StationData>(INITIAL_ELECTRIC_STATIONS);
+  const [stationData, setStationData] = useState<StationData>(EMPTY_STATIONS);
+  const [gasData, setGasData] = useState<StationData>(EMPTY_STATIONS);
+  const [renewableData, setRenewableData] = useState<StationData>(EMPTY_STATIONS);
+  const [electricData, setElectricData] = useState<StationData>(EMPTY_STATIONS);
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── Warn on refresh / tab close ───────────────────────────────────────
+  // ── Apply fetched content to state ────────────────────────────────────
+  const applyContent = useCallback((content: ReportContent) => {
+    setStationData(content.stationData ?? {});
+    setGasData(content.gasData ?? {});
+    setRenewableData(content.renewableData ?? {});
+    setElectricData(content.electricData ?? {});
+  }, []);
+
+  // ── Handle mode selection ─────────────────────────────────────────────
+  const handleModeSelect = useCallback(
+    async (selected: CreationMode) => {
+      if (selected === "scratch") {
+        setStationData(EMPTY_STATIONS);
+        setGasData(EMPTY_STATIONS);
+        setRenewableData(EMPTY_STATIONS);
+        setElectricData(EMPTY_STATIONS);
+        setMode(selected);
+        return;
+      }
+
+      setIsLoadingData(true);
+      try {
+        if (selected === "last-report") {
+          const report = await fetchLatestReport(authFetch);
+          if (report?.content) {
+            applyContent(report.content);
+          } else {
+            toast.error("לא נמצא דוח קודם — נפתח דוח ריק");
+          }
+        } else if (selected === "db-defaults") {
+          const defaults = await fetchDefaultStations(authFetch);
+          if (defaults) {
+            applyContent(defaults);
+          } else {
+            toast.error("לא נמצאו נתוני ברירת מחדל — נפתח דוח ריק");
+          }
+        }
+        setMode(selected);
+      } catch {
+        toast.error("שגיאה בטעינת הנתונים");
+      } finally {
+        setIsLoadingData(false);
+      }
+    },
+    [authFetch, applyContent],
+  );
+
+  // ── Warn on refresh / tab close (only after mode is chosen) ───────────
   useEffect(() => {
+    if (!mode) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+  }, [mode]);
 
   // ── Save (draft or published) ─────────────────────────────────────────
   const handleSave = useCallback(
@@ -157,6 +194,68 @@ export default function NewReportPage() {
     },
     [title, subtitle, user, stationData, gasData, renewableData, electricData, createReport, router],
   );
+
+  // ── Mode selection screen ─────────────────────────────────────────────
+  if (!mode) {
+    return (
+      <div className="min-h-screen bg-gray-50" dir="rtl">
+        <div className="bg-white border-b border-slate-200 px-6 py-5 shadow-sm">
+          <div className="mx-auto max-w-3xl flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm">
+              <FileText className="h-4 w-4" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">יצירת דוח חדש</h1>
+              <p className="text-sm text-slate-500">בחר כיצד להתחיל את הדוח</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/reports")}
+              className="gap-1.5 mr-auto"
+            >
+              <ArrowRight className="h-4 w-4" />
+              חזרה לדוחות
+            </Button>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-3xl px-6 py-12">
+          {isLoadingData ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-16">
+              <Spinner size="lg" label="טוען נתונים…" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <ModeCard
+                icon={Copy}
+                title="המשך מדוח אחרון"
+                description="צור דוח חדש עם הנתונים מהדוח האחרון שהוגש"
+                onClick={() => handleModeSelect("last-report")}
+                disabled={isLoadingData}
+              />
+              <ModeCard
+                icon={Database}
+                title="נתוני ברירת מחדל"
+                description="טען את נתוני ברירת המחדל מהמערכת ועדכן לפי הצורך"
+                onClick={() => handleModeSelect("db-defaults")}
+                disabled={isLoadingData}
+              />
+              <ModeCard
+                icon={FilePlus2}
+                title="דוח ריק"
+                description="התחל דוח חדש מאפס ללא נתונים מוגדרים מראש"
+                onClick={() => handleModeSelect("scratch")}
+                disabled={isLoadingData}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Stepper form (after mode is selected) ─────────────────────────────
 
   const sections: StepperSection[] = [
     { id: "content", label: "יחידות פרטיות", icon: LayoutList },

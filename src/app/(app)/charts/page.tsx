@@ -533,7 +533,6 @@ export default function ChartsPage() {
                 <RadialBarChart innerRadius="20%" outerRadius="90%" data={taskCompletion} startAngle={180} endAngle={0} cx="50%" cy="70%" accessibilityLayer>
                   <RadialBar dataKey="value" background cornerRadius={6} label={{ fill: "#333", fontSize: 11, position: "insideStart" }} />
                   <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   <Legend iconSize={10} layout="horizontal" verticalAlign="bottom" formatter={((value: string, entry: any) => entry?.payload?.name ?? value) as any} />
                 </RadialBarChart>
               </ChartContainer>

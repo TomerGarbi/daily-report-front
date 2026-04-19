@@ -20,6 +20,8 @@ export interface FieldMultiSelectProps {
   onChange?: (value: string[]) => void;
   disabled?: boolean;
   className?: string;
+  /** Custom background class for the trigger (default: "bg-white") */
+  bgColor?: string;
 }
 
 export function FieldMultiSelect({
@@ -33,6 +35,7 @@ export function FieldMultiSelect({
   onChange,
   disabled,
   className,
+  bgColor = "bg-white",
 }: FieldMultiSelectProps) {
   const id = React.useId();
   const [open, setOpen] = React.useState(false);
@@ -86,7 +89,7 @@ export function FieldMultiSelect({
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
-          "flex h-[42px] w-full items-center rounded-xl border bg-white px-3 shadow-sm outline-none text-sm",
+          `flex h-[42px] w-full items-center rounded-xl border ${bgColor} px-3 shadow-sm outline-none text-sm`,
           "transition-colors duration-150",
           open
             ? "border-orange-400 ring-2 ring-orange-100"

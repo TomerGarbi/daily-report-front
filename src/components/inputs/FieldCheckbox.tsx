@@ -12,6 +12,8 @@ export interface FieldCheckboxProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+  /** Custom background class for the checkbox (default: "bg-white") */
+  bgColor?: string;
 }
 
 export function FieldCheckbox({
@@ -23,6 +25,7 @@ export function FieldCheckbox({
   disabled,
   required,
   className,
+  bgColor = "bg-white",
 }: FieldCheckboxProps) {
   const id = React.useId();
 
@@ -36,7 +39,7 @@ export function FieldCheckbox({
           disabled={disabled}
           required={required}
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 bg-white outline-none",
+            `flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${bgColor} outline-none`,
             "transition-colors duration-150",
             "focus-visible:ring-2 focus-visible:ring-orange-200",
             "data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500",

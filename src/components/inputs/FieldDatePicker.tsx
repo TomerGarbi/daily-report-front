@@ -76,7 +76,7 @@ function CalendarPanel({
 
     const cells: { date: Date; current: boolean }[] = [];
 
-    // Trailing days from previous month
+    // Trailing days from previous monthf
     for (let i = firstDay - 1; i >= 0; i--) {
       cells.push({
         date: new Date(viewYear, viewMonth - 1, prevMonthDays - i),
@@ -326,6 +326,8 @@ export interface FieldDatePickerProps {
   disabled?: boolean;
   className?: string;
   showTime?: boolean;
+  /** Custom background class for the trigger (default: "bg-white") */
+  bgColor?: string;
 }
 
 export function FieldDatePicker({
@@ -339,6 +341,7 @@ export function FieldDatePicker({
   disabled,
   className,
   showTime,
+  bgColor = "bg-white",
 }: FieldDatePickerProps) {
   const id = React.useId();
   const [open, setOpen] = React.useState(false);
@@ -360,7 +363,7 @@ export function FieldDatePicker({
             dir="rtl"
             disabled={disabled}
             className={cn(
-              "flex h-[42px] w-full items-center justify-between rounded-xl border bg-white px-3 text-sm shadow-sm outline-none",
+              `flex h-[42px] w-full items-center justify-between rounded-xl border ${bgColor} px-3 text-sm shadow-sm outline-none`,
               "transition-colors duration-150",
               open
                 ? "border-orange-400 ring-2 ring-orange-100"

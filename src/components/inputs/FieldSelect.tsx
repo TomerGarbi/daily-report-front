@@ -19,6 +19,8 @@ export interface FieldSelectProps {
   onValueChange?: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Custom background class for the trigger (default: "bg-white") */
+  bgColor?: string;
 }
 
 export function FieldSelect({
@@ -32,6 +34,7 @@ export function FieldSelect({
   onValueChange,
   disabled,
   className,
+  bgColor = "bg-white",
 }: FieldSelectProps) {
   const id = React.useId();
 
@@ -49,7 +52,7 @@ export function FieldSelect({
           id={id}
           dir="rtl"
           className={cn(
-            "flex w-full items-center justify-between rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none",
+            `flex w-full items-center justify-between rounded-xl border ${bgColor} px-3 py-2.5 text-sm shadow-sm outline-none`,
             "transition-colors duration-150",
             "focus:border-orange-400 focus:ring-2 focus:ring-orange-100",
             error

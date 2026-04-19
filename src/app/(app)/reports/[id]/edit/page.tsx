@@ -71,7 +71,7 @@ export default function EditReportPage() {
           content: { stationData, gasData, renewableData, electricData },
         };
         await updateReport(id, payload);
-        toast.success(status === "draft" ? "הדוח עודכן כטיוטה" : "הדוח עודכן בהצלחה");
+        toast.success(status === "draft" ? "השינויים עודכנו כטיוטה" : "השינויים עודכנו ופורסמו");
         router.push("/reports");
       } catch (err: unknown) {
         console.error("[EditReport] error:", err);
@@ -172,7 +172,7 @@ export default function EditReportPage() {
                 className="gap-2 text-base px-8"
               >
                 <FileDown className="h-5 w-5" />
-                <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
               </Button>
               <Button size="lg" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
                 <span>חברת חשמל</span>
@@ -200,7 +200,7 @@ export default function EditReportPage() {
                   className="gap-2 text-base px-8"
                 >
                   <FileDown className="h-5 w-5" />
-                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
                 </Button>
                 <Button size="lg" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8">
                   <span>נתונים נוספים</span>
@@ -231,7 +231,7 @@ export default function EditReportPage() {
                   className="gap-2 text-base px-8"
                 >
                   <FileDown className="h-5 w-5" />
-                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
                 </Button>
                 <Button size="lg" onClick={() => setActiveSection("review")} className="gap-2 text-base px-8">
                   <span>סיכום ואישור</span>
@@ -268,7 +268,7 @@ export default function EditReportPage() {
                   className="gap-2 text-base px-8"
                 >
                   <FileDown className="h-5 w-5" />
-                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
                 </Button>
                 <Button
                   size="lg"
@@ -277,7 +277,7 @@ export default function EditReportPage() {
                   className="gap-2 text-base px-8"
                 >
                   <Save className="h-5 w-5" />
-                  <span>{isSaving ? "שומר..." : "שמור ופרסם"}</span>
+                  <span>{isSaving ? "מעדכן..." : "עדכן ופרסם"}</span>
                 </Button>
               </div>
             </div>

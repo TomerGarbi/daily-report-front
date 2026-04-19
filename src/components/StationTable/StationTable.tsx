@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FieldText } from "@/components/inputs/FieldText";
 import { FieldSelect } from "@/components/inputs/FieldSelect";
 import { FieldDatePicker } from "@/components/inputs/FieldDatePicker";
 import type { SelectOption } from "@/components/inputs/FieldSelect";
-import { AlertTriangle } from "lucide-react";
-import type { StationRow, StationData } from "@/types/report";
+import { AlertTriangle, Plus, Pencil, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { StationRow, StationData, StationStatus } from "@/types/report";
 
 export type { StationRow, StationData };
 
@@ -35,6 +36,19 @@ function statusColor(status: string) {
       return "bg-amber-100 text-amber-700 border-amber-200";
     default:
       return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+}
+
+function rowBgColor(status: string) {
+  switch (status) {
+    case "Active":
+      return "bg-green-100";
+    case "Inactive":
+      return "bg-red-100";
+    case "Maintenance":
+      return "bg-yellow-100";
+    default:
+      return "";
   }
 }
 
@@ -156,6 +170,29 @@ function ValidationPanel({ errors }: { errors: ValidationError[] }) {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function StationTable({ data, onChange, title, readOnly = false }: StationTableProps) {
+  const canEdit = !readOnly && !!onChange;
+  const [editing, setEditing] = useState(false);
+  const [newStationName, setNewStationName] = useState("");
+
+  const addStation = useCallback(
+    (name: string) => {
+      if (!onChange || !name.trim()) return;
+      const trimmed = name.trim();
+      if (data[trimmed]) return; // already exists
+      const newRow: StationRow = {
+        stationNumber: 1,
+        installedCapacity: 0,
+        availableCapacity: 0,
+        peakCapacity: 0,
+        minReserveCapacity: 0,
+        secondaryFuelPeakCapacity: 0,
+        status: "Active",
+      };
+      onChange({ ...data, [trimmed]: [newRow] });
+    },
+    [data, onChange]
+  );
+
   const updateRow = useCallback(
     (group: string, rowIdx: number, patch: Partial<StationRow>) => {
       if (!onChange) return;
@@ -163,6 +200,26 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       updated[group] = updated[group].map((row, i) =>
         i === rowIdx ? { ...row, ...patch } : row
       );
+      onChange(updated);
+    },
+    [data, onChange]
+  );
+
+  const addRow = useCallback(
+    (group: string) => {
+      if (!onChange) return;
+      const rows = data[group] ?? [];
+      const maxStation = rows.reduce((max, r) => Math.max(max, r.stationNumber), 0);
+      const newRow: StationRow = {
+        stationNumber: maxStation + 1,
+        installedCapacity: 0,
+        availableCapacity: 0,
+        peakCapacity: 0,
+        minReserveCapacity: 0,
+        secondaryFuelPeakCapacity: 0,
+        status: "Active",
+      };
+      const updated = { ...data, [group]: [...rows, newRow] };
       onChange(updated);
     },
     [data, onChange]
@@ -192,8 +249,19 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
     <div className="space-y-3">
     <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
       {title && (
-        <div className="px-4 py-3 border-b border-slate-200" dir="rtl">
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between" dir="rtl">
           <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+          {canEdit && (
+            <Button
+              variant={editing ? "default" : "outline"}
+              size="sm"
+              onClick={() => setEditing((v) => !v)}
+              className={editing ? "gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" : "gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"}
+            >
+              {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+              {editing ? "סיום עריכה" : "ערוך טבלה"}
+            </Button>
+          )}
         </div>
       )}
       <div className="overflow-x-auto">
@@ -216,17 +284,18 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
           <tbody>
             {groups.map((group) => {
               const rows = data[group];
+              const rowCount = rows.length + (editing ? 1 : 0);
               return rows.map((row, rowIdx) => (
                 <tr
                   key={`${group}-${row.stationNumber}`}
-                  className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${
+                  className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${rowBgColor(row.status)} ${
                     rowIdx === rows.length - 1 ? "border-b-slate-200" : ""
                   }`}
                 >
                   {/* שם יחידה — merged, read-only */}
                   {rowIdx === 0 && (
                     <td
-                      rowSpan={rows.length}
+                      rowSpan={rowCount}
                       className="px-4 py-3 text-center align-middle font-semibold text-slate-800 bg-slate-50/60 border-l border-slate-200 whitespace-nowrap"
                     >
                       {group}
@@ -348,7 +417,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                         options={STATUS_OPTIONS}
                         value={row.status}
                         onValueChange={(val) =>
-                          updateRow(group, rowIdx, { status: val })
+                          updateRow(group, rowIdx, { status: val as StationStatus })
                         }
                         className="w-28"
                       />
@@ -426,7 +495,25 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                     )}
                   </td>
                 </tr>
-              ));
+              )).concat(
+                editing
+                  ? [
+                      <tr key={`${group}-add`} className="border-b border-slate-200">
+                        <td colSpan={COL_HEADERS.length - 1} className="px-4 py-2 text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => addRow(group)}
+                            className="gap-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          >
+                            <Plus className="h-4 w-4" />
+                            הוסף שורה
+                          </Button>
+                        </td>
+                      </tr>,
+                    ]
+                  : []
+              );
             })}
           </tbody>
           <tfoot>
@@ -443,6 +530,40 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
           </tfoot>
         </table>
       </div>
+
+      {/* ── Add station group ── */}
+      {editing && (
+        <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2" dir="rtl">
+          <FieldText
+            type="text"
+            value={newStationName}
+            onChange={(e) => setNewStationName(e.target.value)}
+            placeholder="שם תחנה חדשה..."
+            className="h-9 w-60"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newStationName.trim()) {
+                addStation(newStationName);
+                setNewStationName("");
+              }
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (newStationName.trim()) {
+                addStation(newStationName);
+                setNewStationName("");
+              }
+            }}
+            disabled={!newStationName.trim()}
+            className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"
+          >
+            <Plus className="h-4 w-4" />
+            הוסף תחנה
+          </Button>
+        </div>
+      )}
     </div>
 
     </div>

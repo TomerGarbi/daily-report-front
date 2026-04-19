@@ -35,10 +35,7 @@ export default function Home() {
 
   if (!isAuthenticated) return null;
 
-  const displayName =
-    (user?.username as string) ??
-    (user?.name as string) ??
-    (user?.sub as string);
+  const displayName = user?.username;
 
   return (
     <div

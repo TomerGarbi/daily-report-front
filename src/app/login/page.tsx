@@ -13,7 +13,7 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
+  FormLabe,
   FormMessage,
 } from "@/components/ui/form";
 
