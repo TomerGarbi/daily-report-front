@@ -5,9 +5,11 @@ import { FieldText } from "@/components/inputs/FieldText";
 import { FieldSelect } from "@/components/inputs/FieldSelect";
 import { FieldDatePicker } from "@/components/inputs/FieldDatePicker";
 import type { SelectOption } from "@/components/inputs/FieldSelect";
-import { AlertTriangle, Plus, Pencil, X } from "lucide-react";
+import { AlertTriangle, Plus, Pencil, X, BookOpen, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StationRow, StationData, StationStatus } from "@/types/report";
+import { CatalogPickerDialog } from "@/components/StationTable/CatalogPickerDialog";
+import { usePreferences } from "@/components/PreferencesProvider";
 
 export type { StationRow, StationData };
 
@@ -20,6 +22,9 @@ interface StationTableProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+// NOTE: The static `STATUS_OPTIONS` and `statusColor` / `statusLabel` below
+// are the fall-back defaults. The component overrides them at runtime with
+// the user's preferences (see `prefs.statuses` usage below).
 const STATUS_OPTIONS: SelectOption[] = [
   { value: "Active", label: "פעיל" },
   { value: "Inactive", label: "לא פעיל" },
@@ -31,7 +36,7 @@ function statusColor(status: string) {
     case "Active":
       return "bg-emerald-100 text-emerald-700 border-emerald-200";
     case "Inactive":
-      return "bg-slate-100 text-slate-600 border-slate-200";
+      return "bg-red-100 text-slate-600 border-slate-200";
     case "Maintenance":
       return "bg-amber-100 text-amber-700 border-amber-200";
     default:
@@ -39,18 +44,6 @@ function statusColor(status: string) {
   }
 }
 
-function rowBgColor(status: string) {
-  switch (status) {
-    case "Active":
-      return "bg-green-100";
-    case "Inactive":
-      return "bg-red-100";
-    case "Maintenance":
-      return "bg-yellow-100";
-    default:
-      return "";
-  }
-}
 
 function statusLabel(status: string) {
   return STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
@@ -173,6 +166,28 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
   const canEdit = !readOnly && !!onChange;
   const [editing, setEditing] = useState(false);
   const [newStationName, setNewStationName] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Pull user-customised status labels & colours from preferences and
+  // override the static defaults defined above. Falls back to the static
+  // values via the `usePreferences` provider's defaults.
+  const { prefs } = usePreferences();
+  const statusOptions: SelectOption[] = useMemo(
+    () => (Object.keys(prefs.statuses) as Array<keyof typeof prefs.statuses>).map((k) => ({
+      value: k,
+      label: prefs.statuses[k].label,
+    })),
+    [prefs.statuses],
+  );
+  const labelFor = useCallback(
+    (s: string) => prefs.statuses[s as keyof typeof prefs.statuses]?.label ?? s,
+    [prefs.statuses],
+  );
+  const colorFor = useCallback(
+    (s: string) =>
+      prefs.statuses[s as keyof typeof prefs.statuses]?.color ?? statusColor(s),
+    [prefs.statuses],
+  );
 
   const addStation = useCallback(
     (name: string) => {
@@ -223,6 +238,53 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       onChange(updated);
     },
     [data, onChange]
+  );
+
+  /**
+   * Add a row sourced from the station/unit catalog.
+   *
+   * If a group with the picked station's name already exists in the table,
+   * the new unit is appended as another row in that group (preserving the
+   * existing layout where rows from the same station are visually merged).
+   * Otherwise a fresh group is created.
+   *
+   * `installedCapacity`, `mainFuel` and `secondaryFuels` are copied from
+   * the catalog and become read-only in the report (locking is enforced
+   * in the render layer below via `row.stationId`).
+   */
+  const addFromCatalog = useCallback(
+    (
+      stationName: string,
+      stationId: string,
+      unit: { id?: string; _id?: string; tag: string; installedCapacity: number; mainFuel: string; secondaryFuels: string[] },
+    ) => {
+      if (!onChange) return;
+
+      const groupName = stationName.trim() || "תחנה";
+      const rows = data[groupName] ?? [];
+      const unitId = unit.id ?? unit._id;
+
+      // Don't allow duplicating the same unit on the same report.
+      if (unitId && rows.some((r) => r.unitId === unitId)) return;
+
+      const maxStation = rows.reduce((max, r) => Math.max(max, r.stationNumber), 0);
+      const newRow: StationRow = {
+        stationNumber:             maxStation + 1,
+        installedCapacity:         Number(unit.installedCapacity) || 0,
+        availableCapacity:         0,
+        peakCapacity:              0,
+        minReserveCapacity:        0,
+        secondaryFuelPeakCapacity: 0,
+        status:                    "Active",
+        stationId,
+        unitId,
+        mainFuel:                  unit.mainFuel,
+        secondaryFuels:            [...(unit.secondaryFuels ?? [])],
+      };
+
+      onChange({ ...data, [groupName]: [...rows, newRow] });
+    },
+    [data, onChange],
   );
 
   const groups = Object.keys(data);
@@ -288,7 +350,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
               return rows.map((row, rowIdx) => (
                 <tr
                   key={`${group}-${row.stationNumber}`}
-                  className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${rowBgColor(row.status)} ${
+                  className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors  ${
                     rowIdx === rows.length - 1 ? "border-b-slate-200" : ""
                   }`}
                 >
@@ -306,11 +368,19 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   <td className="px-4 py-2 text-center font-medium text-slate-700">
                     {row.stationNumber}
                   </td>
-
                   {/* יכולת מותקנת */}
                   <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span className="px-2 text-slate-700">{row.installedCapacity}</span>
+                    ) : row.stationId ? (
+                      // Catalog-sourced row: value is locked. Edit in /settings/stations.
+                      <span
+                        className="inline-flex items-center gap-1 px-2 text-slate-700"
+                        title="ערך זה מגיע מהקטלוג ונערך בעמוד ההגדרות"
+                      >
+                        <Lock className="h-3 w-3 text-slate-400" />
+                        {row.installedCapacity}
+                      </span>
                     ) : (
                       <FieldText
                         type="number"
@@ -408,18 +478,19 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                   <td className="px-2 py-2 text-center">
                     {readOnly ? (
                       <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${statusColor(row.status)}`}
+                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${colorFor(row.status)}`}
                       >
-                        {statusLabel(row.status)}
+                        {labelFor(row.status)}
                       </span>
                     ) : (
                       <FieldSelect
-                        options={STATUS_OPTIONS}
+                        options={statusOptions}
+                        bgColor={`${colorFor(row.status)}`}
                         value={row.status}
                         onValueChange={(val) =>
                           updateRow(group, rowIdx, { status: val as StationStatus })
                         }
-                        className="w-28"
+                        className={`w-28 `}
                       />
                     )}
                   </td>
@@ -533,7 +604,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
 
       {/* ── Add station group ── */}
       {editing && (
-        <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2" dir="rtl">
+        <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2 flex-wrap" dir="rtl">
           <FieldText
             type="text"
             value={newStationName}
@@ -562,9 +633,41 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
             <Plus className="h-4 w-4" />
             הוסף תחנה
           </Button>
+
+          {/* Catalog-sourced shortcut: pre-fills capacity & fuels and locks them. */}
+          <div className="mx-2 h-6 w-px bg-slate-200" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPickerOpen(true)}
+            className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
+          >
+            <BookOpen className="h-4 w-4" />
+            הוסף מקטלוג
+          </Button>
         </div>
       )}
     </div>
+
+    <CatalogPickerDialog
+      open={pickerOpen}
+      onOpenChange={setPickerOpen}
+      existingStationTags={Object.keys(data)}
+      onPick={(station, unit) => {
+        addFromCatalog(
+          station.name,
+          station.id ?? station._id ?? "",
+          {
+            id: unit.id,
+            _id: unit._id,
+            tag: unit.tag,
+            installedCapacity: unit.installedCapacity,
+            mainFuel: unit.mainFuel,
+            secondaryFuels: unit.secondaryFuels ?? [],
+          },
+        );
+      }}
+    />
 
     </div>
   );

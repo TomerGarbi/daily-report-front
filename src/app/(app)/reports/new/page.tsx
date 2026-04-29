@@ -1,28 +1,50 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList, FileDown, Copy, Database, FilePlus2 } from "lucide-react";
+import {
+  FileText,
+  LayoutList,
+  CheckCircle2,
+  ArrowLeft,
+  ArrowRight,
+  Zap,
+  Save,
+  ClipboardList,
+  FileDown,
+  Copy,
+  FilePlus2,
+  TrendingUp,
+  Archive,
+} from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
-import { StationTable } from "@/components/StationTable/StationTable";
-import type { StationData, ReportContent } from "@/types/report";
+import {
+  FuelGroupedTables,
+  seedTypeFromCatalog,
+  type FuelBuckets,
+} from "@/components/reports/FuelGroupedTables";
+import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
+import { ArchiveSection } from "@/components/reports/ArchiveSection";
+import type { ArchiveBlock, ForecastBlock, LastYearArchiveBlock, ReportContent } from "@/types/report";
+import { emptyReportContent, normalizeReportContent } from "@/types/report";
+import { emptyForecast } from "@/components/reports/forecast/forecast-defaults";
+import { forecastSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
-import { fetchLatestReport, fetchDefaultStations } from "@/lib/api";
+import { fetchLatestReport } from "@/lib/api";
+import { fetchStations } from "@/lib/stations-api";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
 
-// ─── Creation mode types ────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
-type CreationMode = "last-report" | "db-defaults" | "scratch";
+type CreationMode = "last-report" | "scratch";
 
-// ─── Empty station data ─────────────────────────────────────────────────────
-
-const EMPTY_STATIONS: StationData = {};
+const SECTION_IDS = ["private", "iec", "forecast", "archive", "additional", "review"] as const;
+type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,18 +53,21 @@ function getTodayTitle() {
   return `דוח יומי - ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-const DAY_NAMES_HE = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "שבת"];
+const DAY_NAMES_HE = [
+  "יום ראשון",
+  "יום שני",
+  "יום שלישי",
+  "יום רביעי",
+  "יום חמישי",
+  "יום שישי",
+  "שבת",
+];
 
 function getDayDescription() {
   return `דוח יומי ל${DAY_NAMES_HE[new Date().getDay()]}`;
 }
 
-// ─── Section definitions ────────────────────────────────────────────────────
-
-const SECTION_IDS = ["content", "electric", "additional", "review"] as const;
-type SectionId = (typeof SECTION_IDS)[number];
-
-// ─── Mode Selection Card ────────────────────────────────────────────────────
+// ─── Mode card ──────────────────────────────────────────────────────────────
 
 function ModeCard({
   icon: Icon,
@@ -82,67 +107,106 @@ export default function NewReportPage() {
   const authFetch = useAuthFetch();
   const { createReport } = useReportMutations();
 
-  // Mode selection state
   const [mode, setMode] = useState<CreationMode | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   const [title, setTitle] = useState(getTodayTitle());
   const [subtitle, setSubtitle] = useState(getDayDescription());
-  const [activeSection, setActiveSection] = useState<SectionId>("content");
-  const [stationData, setStationData] = useState<StationData>(EMPTY_STATIONS);
-  const [gasData, setGasData] = useState<StationData>(EMPTY_STATIONS);
-  const [renewableData, setRenewableData] = useState<StationData>(EMPTY_STATIONS);
-  const [electricData, setElectricData] = useState<StationData>(EMPTY_STATIONS);
+  const [activeSection, setActiveSection] = useState<SectionId>("private");
+  const [content, setContent] = useState<ReportContent>(emptyReportContent());
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── Apply fetched content to state ────────────────────────────────────
-  const applyContent = useCallback((content: ReportContent) => {
-    setStationData(content.stationData ?? {});
-    setGasData(content.gasData ?? {});
-    setRenewableData(content.renewableData ?? {});
-    setElectricData(content.electricData ?? {});
-  }, []);
+  // ── Per-section setters ───────────────────────────────────────────────
+  const setPrivateBuckets = useCallback(
+    (next: FuelBuckets) =>
+      setContent((c) => ({ ...c, private: next })),
+    [],
+  );
+  const setIecBuckets = useCallback(
+    (next: FuelBuckets) =>
+      setContent((c) => ({ ...c, iec: next })),
+    [],
+  );
+  const setForecast = useCallback(
+    (next: ForecastBlock) =>
+      setContent((c) => ({ ...c, forecast: next })),
+    [],
+  );
+  const setArchive = useCallback(
+    (next: ArchiveBlock) =>
+      setContent((c) => ({ ...c, archive: next })),
+    [],
+  );
+  const setArchiveExtraDays = useCallback(
+    (next: ArchiveBlock[]) =>
+      setContent((c) => ({ ...c, archiveExtraDays: next })),
+    [],
+  );
+  const setLastYearArchive = useCallback(
+    (next: LastYearArchiveBlock) =>
+      setContent((c) => ({ ...c, lastYearArchive: next })),
+    [],
+  );
 
-  // ── Handle mode selection ─────────────────────────────────────────────
+  // Per-step validation errors (currently only the forecast step uses Zod-driven
+  // field-level errors). Cleared whenever the user navigates between steps.
+  const [forecastErrors, setForecastErrors] = useState<Record<string, string>>({});
+
+  const handleNextFromForecast = useCallback(() => {
+    const candidate = content.forecast ?? emptyForecast();
+    const result = forecastSchema.safeParse(candidate);
+    if (!result.success) {
+      const flat: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        flat[issue.path.join(".")] = issue.message;
+      }
+      setForecastErrors(flat);
+      toast.error("יש להשלים את כל שדות התחזית לפני המעבר הלאה");
+      return;
+    }
+    setForecastErrors({});
+    setContent((c) => ({ ...c, forecast: result.data }));
+    setActiveSection("archive");
+  }, [content.forecast]);
+
+  // ── Mode selection ────────────────────────────────────────────────────
   const handleModeSelect = useCallback(
     async (selected: CreationMode) => {
-      if (selected === "scratch") {
-        setStationData(EMPTY_STATIONS);
-        setGasData(EMPTY_STATIONS);
-        setRenewableData(EMPTY_STATIONS);
-        setElectricData(EMPTY_STATIONS);
-        setMode(selected);
-        return;
-      }
-
       setIsLoadingData(true);
       try {
-        if (selected === "last-report") {
+        if (selected === "scratch") {
+          // Pre-populate from the station catalog: private → private bucket,
+          // iec → iec bucket. Each station's `fuel` decides which sub-table
+          // it lands in. Defaults: status=Active, installedCapacity from
+          // catalog, all other capacities 0.
+          const stations = await fetchStations(authFetch);
+          setContent({
+            private: seedTypeFromCatalog(stations, "private"),
+            iec:     seedTypeFromCatalog(stations, "iec"),
+          });
+        } else if (selected === "last-report") {
           const report = await fetchLatestReport(authFetch);
           if (report?.content) {
-            applyContent(report.content);
+            setContent(normalizeReportContent(report.content));
           } else {
             toast.error("לא נמצא דוח קודם — נפתח דוח ריק");
-          }
-        } else if (selected === "db-defaults") {
-          const defaults = await fetchDefaultStations(authFetch);
-          if (defaults) {
-            applyContent(defaults);
-          } else {
-            toast.error("לא נמצאו נתוני ברירת מחדל — נפתח דוח ריק");
+            setContent(emptyReportContent());
           }
         }
         setMode(selected);
-      } catch {
-        toast.error("שגיאה בטעינת הנתונים");
+      } catch (err) {
+        console.error("[NewReport] mode select failed:", err);
+        toast.error("שגיאה בטעינת הנתונים — נפתח דוח ריק");
+        setContent(emptyReportContent());
+        setMode(selected);
       } finally {
         setIsLoadingData(false);
       }
     },
-    [authFetch, applyContent],
+    [authFetch],
   );
 
-  // ── Warn on refresh / tab close (only after mode is chosen) ───────────
+  // ── Warn on refresh / tab close (only after mode chosen) ──────────────
   useEffect(() => {
     if (!mode) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -152,7 +216,7 @@ export default function NewReportPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [mode]);
 
-  // ── Save (draft or published) ─────────────────────────────────────────
+  // ── Save (draft / published) ──────────────────────────────────────────
   const handleSave = useCallback(
     async (status: "draft" | "published") => {
       setIsSaving(true);
@@ -160,24 +224,28 @@ export default function NewReportPage() {
         const payload = {
           title,
           description: subtitle,
-          group: user?.groups?.[0] ?? "",
           status,
-          content: { stationData, gasData, renewableData, electricData },
+          content,
         };
-        console.log("[SaveReport] payload:", payload);
         await createReport(payload);
-        toast.success(status === "draft" ? "הדוח נשמר כטיוטה" : "הדוח נשמר בהצלחה");
+        toast.success(
+          status === "draft" ? "הדוח נשמר כטיוטה" : "הדוח נשמר בהצלחה",
+        );
         router.push("/reports");
       } catch (err: unknown) {
         console.error("[SaveReport] error:", err);
-        const apiErr = err as { message?: string; status?: number; body?: Record<string, unknown> };
-        console.error("[SaveReport] status:", apiErr.status);
-        console.error("[SaveReport] body:", apiErr.body);
-
+        const apiErr = err as {
+          message?: string;
+          status?: number;
+          body?: Record<string, unknown>;
+        };
         const errors = apiErr.body?.errors;
         if (Array.isArray(errors)) {
           const details = errors
-            .map((e: { field?: string; message?: string }) => `${e.field ?? "?"}: ${e.message ?? "שגיאה"}`)
+            .map(
+              (e: { field?: string; message?: string }) =>
+                `${e.field ?? "?"}: ${e.message ?? "שגיאה"}`,
+            )
             .join("\n");
           toast.error(`שגיאת ולידציה:\n${details}`);
         } else if (typeof errors === "object" && errors !== null) {
@@ -192,7 +260,7 @@ export default function NewReportPage() {
         setIsSaving(false);
       }
     },
-    [title, subtitle, user, stationData, gasData, renewableData, electricData, createReport, router],
+    [title, subtitle, content, createReport, router],
   );
 
   // ── Mode selection screen ─────────────────────────────────────────────
@@ -226,7 +294,7 @@ export default function NewReportPage() {
               <Spinner size="lg" label="טוען נתונים…" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <ModeCard
                 icon={Copy}
                 title="המשך מדוח אחרון"
@@ -235,16 +303,9 @@ export default function NewReportPage() {
                 disabled={isLoadingData}
               />
               <ModeCard
-                icon={Database}
-                title="נתוני ברירת מחדל"
-                description="טען את נתוני ברירת המחדל מהמערכת ועדכן לפי הצורך"
-                onClick={() => handleModeSelect("db-defaults")}
-                disabled={isLoadingData}
-              />
-              <ModeCard
                 icon={FilePlus2}
-                title="דוח ריק"
-                description="התחל דוח חדש מאפס ללא נתונים מוגדרים מראש"
+                title="דוח ריק מהקטלוג"
+                description="התחל דוח חדש עם תחנות מקטלוג ההגדרות (סטטוס: פעיל)"
                 onClick={() => handleModeSelect("scratch")}
                 disabled={isLoadingData}
               />
@@ -255,13 +316,14 @@ export default function NewReportPage() {
     );
   }
 
-  // ── Stepper form (after mode is selected) ─────────────────────────────
-
+  // ── Stepper form ──────────────────────────────────────────────────────
   const sections: StepperSection[] = [
-    { id: "content", label: "יחידות פרטיות", icon: LayoutList },
-    { id: "electric", label: "חברת חשמל", icon: Zap },
-    { id: "additional", label: "נתונים נוספים", icon: ClipboardList },
-    { id: "review", label: "סיכום ואישור", icon: CheckCircle2 },
+    { id: "private",    label: "יחידות פרטיות",  icon: LayoutList },
+    { id: "iec",        label: "חברת חשמל",      icon: Zap },
+    { id: "forecast",   label: "תחזית",          icon: TrendingUp },
+    { id: "archive",    label: "ארכיון",          icon: Archive },
+    { id: "additional", label: "נתונים נוספים",  icon: ClipboardList },
+    { id: "review",     label: "סיכום ואישור",   icon: CheckCircle2 },
   ];
 
   return (
@@ -280,11 +342,13 @@ export default function NewReportPage() {
       />
 
       <div className="w-full px-6 py-8">
-        {activeSection === "content" && (
+        {activeSection === "private" && (
           <div className="space-y-8">
-            <StationTable title="תחנות כוח קונבנציונליות" data={stationData} onChange={setStationData} />
-            <StationTable title="תחנות גז טבעי" data={gasData} onChange={setGasData} />
-            <StationTable title="תחנות אנרגיה מתחדשת" data={renewableData} onChange={setRenewableData} />
+            <FuelGroupedTables
+              buckets={content.private}
+              onChange={setPrivateBuckets}
+              titlePrefix="יחידות פרטיות"
+            />
 
             <div className="flex justify-between">
               <Button
@@ -297,7 +361,11 @@ export default function NewReportPage() {
                 <FileDown className="h-5 w-5" />
                 <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
               </Button>
-              <Button size="lg" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                onClick={() => setActiveSection("iec")}
+                className="gap-2 text-base px-8"
+              >
                 <span>חברת חשמל</span>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -305,12 +373,21 @@ export default function NewReportPage() {
           </div>
         )}
 
-        {activeSection === "electric" && (
+        {activeSection === "iec" && (
           <div className="space-y-8">
-            <StationTable title="חברת חשמל" data={electricData} onChange={setElectricData} />
+            <FuelGroupedTables
+              buckets={content.iec}
+              onChange={setIecBuckets}
+              titlePrefix="חברת חשמל"
+            />
 
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("content")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("private")}
+                className="gap-2 text-base px-8"
+              >
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
@@ -325,7 +402,99 @@ export default function NewReportPage() {
                   <FileDown className="h-5 w-5" />
                   <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
                 </Button>
-                <Button size="lg" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8">
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("forecast")}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>תחזית</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "forecast" && (
+          <div className="space-y-8">
+            <ForecastSection
+              value={content.forecast}
+              onChange={setForecast}
+              errors={forecastErrors}
+            />
+
+            <div className="flex justify-between">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("iec")}
+                className="gap-2 text-base px-8"
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לחברת חשמל</span>
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
+                  className="gap-2 text-base px-8"
+                >
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleNextFromForecast}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>ארכיון</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "archive" && (
+          <div className="space-y-8">
+            <ArchiveSection
+              value={content.archive}
+              onChange={setArchive}
+              extraDays={content.archiveExtraDays}
+              onExtraDaysChange={setArchiveExtraDays}
+              lastYearValue={content.lastYearArchive}
+              onLastYearChange={setLastYearArchive}
+              enabled
+            />
+
+            <div className="flex justify-between">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("forecast")}
+                className="gap-2 text-base px-8"
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לתחזית</span>
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
+                  className="gap-2 text-base px-8"
+                >
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("additional")}
+                  className="gap-2 text-base px-8"
+                >
                   <span>נתונים נוספים</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
@@ -341,9 +510,14 @@ export default function NewReportPage() {
             </div>
 
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("archive")}
+                className="gap-2 text-base px-8"
+              >
                 <ArrowRight className="h-5 w-5" />
-                <span>חזרה לחברת חשמל</span>
+                <span>חזרה לארכיון</span>
               </Button>
               <div className="flex gap-3">
                 <Button
@@ -356,7 +530,11 @@ export default function NewReportPage() {
                   <FileDown className="h-5 w-5" />
                   <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
                 </Button>
-                <Button size="lg" onClick={() => setActiveSection("review")} className="gap-2 text-base px-8">
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("review")}
+                  className="gap-2 text-base px-8"
+                >
                   <span>סיכום ואישור</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
@@ -367,18 +545,55 @@ export default function NewReportPage() {
 
         {activeSection === "review" && (
           <div className="space-y-8">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 space-y-4" dir="rtl">
+            <div
+              className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 space-y-4"
+              dir="rtl"
+            >
               <h3 className="text-lg font-semibold text-slate-800">סיכום הדוח</h3>
               <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
-                <div><span className="font-medium">כותרת: </span>{title}</div>
-                <div><span className="font-medium">תיאור: </span>{subtitle}</div>
-                <div><span className="font-medium">קבוצה: </span>{user?.groups?.[0] ?? "—"}</div>
-                <div><span className="font-medium">סטטוס: </span>פורסם</div>
+                <div>
+                  <span className="font-medium">כותרת: </span>
+                  {title}
+                </div>
+                <div>
+                  <span className="font-medium">תיאור: </span>
+                  {subtitle}
+                </div>
+                <div>
+                  <span className="font-medium">קבוצה: </span>
+                  {user?.groups?.[0] ?? "—"}
+                </div>
+                <div>
+                  <span className="font-medium">סטטוס: </span>פורסם
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-500 pt-2">
+                סך טבלאות: {Object.keys(content.private).length +
+                  Object.keys(content.iec).length}
               </div>
             </div>
 
+            {content.forecast && (
+              <ForecastSection value={content.forecast} readOnly />
+            )}
+            {content.archive && (
+              <ArchiveSection
+                value={content.archive}
+                extraDays={content.archiveExtraDays}
+                lastYearValue={content.lastYearArchive}
+                readOnly
+              />
+            )}
+
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8" disabled={isSaving}>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("additional")}
+                className="gap-2 text-base px-8"
+                disabled={isSaving}
+              >
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לנתונים נוספים</span>
               </Button>

@@ -4,10 +4,12 @@ import { useParams, useRouter } from "next/navigation";
 import { FileText, ArrowRight, Calendar, User, Tag, Pencil } from "lucide-react";
 import { useReport } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
-import { StationTable } from "@/components/StationTable/StationTable";
+import { FuelGroupedTables } from "@/components/reports/FuelGroupedTables";
+import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
+import { ArchiveSection } from "@/components/reports/ArchiveSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import type { StationData } from "@/types/report";
+import { normalizeReportContent } from "@/types/report";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,7 +33,7 @@ function statusColor(status: string) {
     : "bg-amber-100 text-amber-700 border-amber-200";
 }
 
-function hasData(d?: StationData) {
+function hasData(d?: Record<string, unknown>) {
   return d && Object.keys(d).length > 0;
 }
 
@@ -64,7 +66,9 @@ export default function ReportViewPage() {
     );
   }
 
-  const { stationData, gasData, renewableData, electricData } = report.content ?? {};
+  const content = normalizeReportContent(report.content);
+  const hasPrivate = hasData(content.private);
+  const hasIec     = hasData(content.iec);
 
   const canEdit =
     user?.role === "manager" ||
@@ -107,13 +111,6 @@ export default function ReportViewPage() {
                 {formatDate(report.createdAt)}
               </span>
 
-              {report.group && (
-                <span className="text-slate-400">|</span>
-              )}
-              {report.group && (
-                <span>{report.group}</span>
-              )}
-
               {report.updatedAt && report.updatedAt !== report.createdAt && (
                 <>
                   <span className="text-slate-400">|</span>
@@ -153,39 +150,34 @@ export default function ReportViewPage() {
 
       {/* ── Body: all sections concatenated ────────────────────────── */}
       <div className="w-full px-6 py-8 space-y-8">
-        {hasData(stationData) && (
-          <StationTable
-            title="תחנות כוח קונבנציונליות"
-            data={stationData!}
+        {hasPrivate && (
+          <FuelGroupedTables
+            buckets={content.private}
+            titlePrefix="יחידות פרטיות"
             readOnly
           />
         )}
 
-        {hasData(gasData) && (
-          <StationTable
-            title="תחנות גז טבעי"
-            data={gasData!}
+        {hasIec && (
+          <FuelGroupedTables
+            buckets={content.iec}
+            titlePrefix="חברת חשמל"
             readOnly
           />
         )}
 
-        {hasData(renewableData) && (
-          <StationTable
-            title="תחנות אנרגיה מתחדשת"
-            data={renewableData!}
-            readOnly
-          />
+        {content.forecast && (
+          <ForecastSection value={content.forecast} readOnly />
         )}
 
-        {hasData(electricData) && (
-          <StationTable
-            title="חברת חשמל"
-            data={electricData!}
-            readOnly
-          />
-        )}
+        <ArchiveSection
+          value={content.archive}
+          extraDays={content.archiveExtraDays}
+          lastYearValue={content.lastYearArchive}
+          readOnly
+        />
 
-        {!hasData(stationData) && !hasData(gasData) && !hasData(renewableData) && !hasData(electricData) && (
+        {!hasPrivate && !hasIec && !content.forecast && (
           <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 text-center text-slate-500">
             אין נתוני תחנות בדוח זה
           </div>

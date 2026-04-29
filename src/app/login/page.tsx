@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/useAuth";
 import { loginSchema, type LoginFormValues } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabe,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 
@@ -24,6 +25,7 @@ import { Spinner } from "@/components/Spinner";
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const router = useRouter();
+  const t = useTranslations("login");
 
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -44,7 +46,7 @@ export default function LoginPage() {
       await login(values);
       router.replace("/");
     } catch {
-      setServerError("שם משתמש או סיסמה שגויים");
+      setServerError(t("error"));
     }
   }
 
@@ -57,7 +59,7 @@ export default function LoginPage() {
           <DailyReportLogo />
           <Image
             src="/images/NogaLogo.png"
-            alt="נוגה"
+            alt={t("logoLabel")}
             width={140}
             height={60}
             className="object-contain"
@@ -66,8 +68,8 @@ export default function LoginPage() {
 
         {/* Welcome */}
         <div className="mb-6 text-center">
-          <h2 className="text-2xl font-bold text-foreground">ברוך הבא</h2>
-          <p className="mt-1 text-sm text-muted-foreground">הכנס את פרטי ההתחברות שלך להמשך</p>
+          <h2 className="text-2xl font-bold text-foreground">{t("welcome")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
 
         {/* Form card */}
@@ -79,11 +81,11 @@ export default function LoginPage() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">שם משתמש</FormLabel>
+                    <FormLabel className="text-sm font-medium">{t("username.label")}</FormLabel>
                     <FormControl>
                       <Input
                         autoComplete="username"
-                        placeholder="הכנס שם משתמש"
+                        placeholder={t("username.placeholder")}
                         className="h-11 text-base"
                         {...field}
                       />
@@ -98,12 +100,12 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">סיסמה</FormLabel>
+                    <FormLabel className="text-sm font-medium">{t("password.label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
                         autoComplete="current-password"
-                        placeholder="הכנס סיסמה"
+                        placeholder={t("password.placeholder")}
                         className="h-11 text-base"
                         {...field}
                       />
@@ -114,7 +116,11 @@ export default function LoginPage() {
               />
 
               {serverError && (
-                <p className="rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600 text-center">
+                <p
+                  role="alert"
+                  aria-live="assertive"
+                  className="rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600 text-center"
+                >
                   {serverError}
                 </p>
               )}
@@ -127,9 +133,9 @@ export default function LoginPage() {
                 {form.formState.isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Spinner size="sm" />
-                    מתחבר…
+                    {t("submitting")}
                   </span>
-                ) : "כניסה"}
+                ) : t("submit")}
               </Button>
             </form>
           </Form>

@@ -50,12 +50,19 @@ export function ReportsTable({
           {isLoading ? (
             <TableRow>
               <TableCell colSpan={5} className="py-16">
-                <Spinner size="md" label="טוען דוחות…" className="mx-auto" />
+                <div role="status" aria-live="polite">
+                  <Spinner size="md" label="טוען דוחות…" className="mx-auto" />
+                </div>
               </TableCell>
             </TableRow>
           ) : error ? (
             <TableRow>
-              <TableCell colSpan={5} className="py-16 text-center text-rose-500">
+              <TableCell
+                colSpan={5}
+                role="alert"
+                aria-live="assertive"
+                className="py-16 text-center text-rose-500"
+              >
                 שגיאה בטעינת הדוחות
               </TableCell>
             </TableRow>
@@ -68,7 +75,7 @@ export function ReportsTable({
           ) : (
             reports.map((report, idx) => (
               <TableRow
-                key={report._id ?? report.id}
+                key={report.id}
                 className={`transition-colors ${
                   idx % 2 === 0
                     ? "bg-white hover:bg-orange-50"
@@ -89,7 +96,7 @@ export function ReportsTable({
                 </TableCell>
                 <TableCell>
                   <ReportRowActions
-                    reportId={report._id ?? report.id}
+                    reportId={report.id}
                     reportAuthor={report.createdBy?.username}
                     onDelete={onDelete}
                   />

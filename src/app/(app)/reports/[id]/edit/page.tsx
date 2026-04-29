@@ -2,11 +2,31 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileText, LayoutList, CheckCircle2, ArrowLeft, ArrowRight, Zap, Save, ClipboardList, FileDown } from "lucide-react";
+import {
+  FileText,
+  LayoutList,
+  CheckCircle2,
+  ArrowLeft,
+  ArrowRight,
+  Zap,
+  Save,
+  ClipboardList,
+  FileDown,
+  TrendingUp,
+  Archive,
+} from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
-import { StationTable } from "@/components/StationTable/StationTable";
-import type { StationData } from "@/types/report";
+import {
+  FuelGroupedTables,
+  type FuelBuckets,
+} from "@/components/reports/FuelGroupedTables";
+import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
+import { ArchiveSection } from "@/components/reports/ArchiveSection";
+import type { ArchiveBlock, ForecastBlock, LastYearArchiveBlock, ReportContent } from "@/types/report";
+import { emptyReportContent, normalizeReportContent } from "@/types/report";
+import { emptyForecast } from "@/components/reports/forecast/forecast-defaults";
+import { forecastSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { useReport, useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,7 +35,7 @@ import { toast } from "sonner";
 
 // ─── Section definitions ────────────────────────────────────────────────────
 
-const SECTION_IDS = ["content", "electric", "additional", "review"] as const;
+const SECTION_IDS = ["private", "iec", "forecast", "archive", "additional", "review"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -29,23 +49,62 @@ export default function EditReportPage() {
 
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [activeSection, setActiveSection] = useState<SectionId>("content");
-  const [stationData, setStationData] = useState<StationData>({});
-  const [gasData, setGasData] = useState<StationData>({});
-  const [renewableData, setRenewableData] = useState<StationData>({});
-  const [electricData, setElectricData] = useState<StationData>({});
+  const [activeSection, setActiveSection] = useState<SectionId>("private");
+  const [content, setContent] = useState<ReportContent>(emptyReportContent());
   const [isSaving, setIsSaving] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  // ── Populate state from fetched report ────────────────────────────────
+  // ── Per-section setters ───────────────────────────────────────────────
+  const setPrivateBuckets = useCallback(
+    (next: FuelBuckets) => setContent((c) => ({ ...c, private: next })),
+    [],
+  );
+  const setIecBuckets = useCallback(
+    (next: FuelBuckets) => setContent((c) => ({ ...c, iec: next })),
+    [],
+  );
+  const setForecast = useCallback(
+    (next: ForecastBlock) => setContent((c) => ({ ...c, forecast: next })),
+    [],
+  );
+  const setArchive = useCallback(
+    (next: ArchiveBlock) => setContent((c) => ({ ...c, archive: next })),
+    [],
+  );
+  const setArchiveExtraDays = useCallback(
+    (next: ArchiveBlock[]) => setContent((c) => ({ ...c, archiveExtraDays: next })),
+    [],
+  );
+  const setLastYearArchive = useCallback(
+    (next: LastYearArchiveBlock) => setContent((c) => ({ ...c, lastYearArchive: next })),
+    [],
+  );
+
+  const [forecastErrors, setForecastErrors] = useState<Record<string, string>>({});
+
+  const handleNextFromForecast = useCallback(() => {
+    const candidate = content.forecast ?? emptyForecast();
+    const result = forecastSchema.safeParse(candidate);
+    if (!result.success) {
+      const flat: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        flat[issue.path.join(".")] = issue.message;
+      }
+      setForecastErrors(flat);
+      toast.error("יש להשלים את כל שדות התחזית לפני המעבר הלאה");
+      return;
+    }
+    setForecastErrors({});
+    setContent((c) => ({ ...c, forecast: result.data }));
+    setActiveSection("archive");
+  }, [content.forecast]);
+
+  // ── Hydrate state from fetched report ─────────────────────────────────
   useEffect(() => {
     if (report && !initialized) {
       setTitle(report.title);
       setSubtitle(report.description);
-      setStationData(report.content?.stationData ?? {});
-      setGasData(report.content?.gasData ?? {});
-      setRenewableData(report.content?.renewableData ?? {});
-      setElectricData(report.content?.electricData ?? {});
+      setContent(normalizeReportContent(report.content));
       setInitialized(true);
     }
   }, [report, initialized]);
@@ -59,7 +118,7 @@ export default function EditReportPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // ── Save (draft or published) ─────────────────────────────────────────
+  // ── Save (draft / published) ──────────────────────────────────────────
   const handleSave = useCallback(
     async (status: "draft" | "published") => {
       setIsSaving(true);
@@ -68,19 +127,29 @@ export default function EditReportPage() {
           title,
           description: subtitle,
           status,
-          content: { stationData, gasData, renewableData, electricData },
+          content,
         };
         await updateReport(id, payload);
-        toast.success(status === "draft" ? "השינויים עודכנו כטיוטה" : "השינויים עודכנו ופורסמו");
+        toast.success(
+          status === "draft"
+            ? "השינויים עודכנו כטיוטה"
+            : "השינויים עודכנו ופורסמו",
+        );
         router.push("/reports");
       } catch (err: unknown) {
         console.error("[EditReport] error:", err);
-        const apiErr = err as { message?: string; status?: number; body?: Record<string, unknown> };
-
+        const apiErr = err as {
+          message?: string;
+          status?: number;
+          body?: Record<string, unknown>;
+        };
         const errors = apiErr.body?.errors;
         if (Array.isArray(errors)) {
           const details = errors
-            .map((e: { field?: string; message?: string }) => `${e.field ?? "?"}: ${e.message ?? "שגיאה"}`)
+            .map(
+              (e: { field?: string; message?: string }) =>
+                `${e.field ?? "?"}: ${e.message ?? "שגיאה"}`,
+            )
             .join("\n");
           toast.error(`שגיאת ולידציה:\n${details}`);
         } else if (typeof errors === "object" && errors !== null) {
@@ -95,7 +164,7 @@ export default function EditReportPage() {
         setIsSaving(false);
       }
     },
-    [id, title, subtitle, stationData, gasData, renewableData, electricData, updateReport, router],
+    [id, title, subtitle, content, updateReport, router],
   );
 
   // ── Loading / error states ────────────────────────────────────────────
@@ -120,7 +189,7 @@ export default function EditReportPage() {
     );
   }
 
-  // ── Authorization: only owner, manager, or admin may edit ─────────────
+  // ── Authorization ─────────────────────────────────────────────────────
   const isOwner = user?.username === report.createdBy?.username;
   const isPrivileged = user?.role === "manager" || user?.role === "admin";
   if (!isOwner && !isPrivileged) {
@@ -135,10 +204,12 @@ export default function EditReportPage() {
   }
 
   const sections: StepperSection[] = [
-    { id: "content", label: "יחידות פרטיות", icon: LayoutList },
-    { id: "electric", label: "חברת חשמל", icon: Zap },
-    { id: "additional", label: "נתונים נוספים", icon: ClipboardList },
-    { id: "review", label: "סיכום ואישור", icon: CheckCircle2 },
+    { id: "private",    label: "יחידות פרטיות",  icon: LayoutList },
+    { id: "iec",        label: "חברת חשמל",      icon: Zap },
+    { id: "forecast",   label: "תחזית",          icon: TrendingUp },
+    { id: "archive",    label: "ארכיון",          icon: Archive },
+    { id: "additional", label: "נתונים נוספים",  icon: ClipboardList },
+    { id: "review",     label: "סיכום ואישור",   icon: CheckCircle2 },
   ];
 
   return (
@@ -157,11 +228,13 @@ export default function EditReportPage() {
       />
 
       <div className="w-full px-6 py-8">
-        {activeSection === "content" && (
+        {activeSection === "private" && (
           <div className="space-y-8">
-            <StationTable title="תחנות כוח קונבנציונליות" data={stationData} onChange={setStationData} />
-            <StationTable title="תחנות גז טבעי" data={gasData} onChange={setGasData} />
-            <StationTable title="תחנות אנרגיה מתחדשת" data={renewableData} onChange={setRenewableData} />
+            <FuelGroupedTables
+              buckets={content.private}
+              onChange={setPrivateBuckets}
+              titlePrefix="יחידות פרטיות"
+            />
 
             <div className="flex justify-between">
               <Button
@@ -174,7 +247,11 @@ export default function EditReportPage() {
                 <FileDown className="h-5 w-5" />
                 <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
               </Button>
-              <Button size="lg" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                onClick={() => setActiveSection("iec")}
+                className="gap-2 text-base px-8"
+              >
                 <span>חברת חשמל</span>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -182,12 +259,21 @@ export default function EditReportPage() {
           </div>
         )}
 
-        {activeSection === "electric" && (
+        {activeSection === "iec" && (
           <div className="space-y-8">
-            <StationTable title="חברת חשמל" data={electricData} onChange={setElectricData} />
+            <FuelGroupedTables
+              buckets={content.iec}
+              onChange={setIecBuckets}
+              titlePrefix="חברת חשמל"
+            />
 
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("content")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("private")}
+                className="gap-2 text-base px-8"
+              >
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
@@ -202,7 +288,99 @@ export default function EditReportPage() {
                   <FileDown className="h-5 w-5" />
                   <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
                 </Button>
-                <Button size="lg" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8">
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("forecast")}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>תחזית</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "forecast" && (
+          <div className="space-y-8">
+            <ForecastSection
+              value={content.forecast}
+              onChange={setForecast}
+              errors={forecastErrors}
+            />
+
+            <div className="flex justify-between">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("iec")}
+                className="gap-2 text-base px-8"
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לחברת חשמל</span>
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
+                  className="gap-2 text-base px-8"
+                >
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleNextFromForecast}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>ארכיון</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "archive" && (
+          <div className="space-y-8">
+            <ArchiveSection
+              value={content.archive}
+              onChange={setArchive}
+              extraDays={content.archiveExtraDays}
+              onExtraDaysChange={setArchiveExtraDays}
+              lastYearValue={content.lastYearArchive}
+              onLastYearChange={setLastYearArchive}
+              enabled
+            />
+
+            <div className="flex justify-between">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("forecast")}
+                className="gap-2 text-base px-8"
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לתחזית</span>
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
+                  className="gap-2 text-base px-8"
+                >
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("additional")}
+                  className="gap-2 text-base px-8"
+                >
                   <span>נתונים נוספים</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
@@ -218,9 +396,14 @@ export default function EditReportPage() {
             </div>
 
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("electric")} className="gap-2 text-base px-8">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("archive")}
+                className="gap-2 text-base px-8"
+              >
                 <ArrowRight className="h-5 w-5" />
-                <span>חזרה לחברת חשמל</span>
+                <span>חזרה לארכיון</span>
               </Button>
               <div className="flex gap-3">
                 <Button
@@ -233,7 +416,11 @@ export default function EditReportPage() {
                   <FileDown className="h-5 w-5" />
                   <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
                 </Button>
-                <Button size="lg" onClick={() => setActiveSection("review")} className="gap-2 text-base px-8">
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("review")}
+                  className="gap-2 text-base px-8"
+                >
                   <span>סיכום ואישור</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
@@ -244,18 +431,47 @@ export default function EditReportPage() {
 
         {activeSection === "review" && (
           <div className="space-y-8">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 space-y-4" dir="rtl">
+            <div
+              className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 space-y-4"
+              dir="rtl"
+            >
               <h3 className="text-lg font-semibold text-slate-800">סיכום הדוח</h3>
               <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
-                <div><span className="font-medium">כותרת: </span>{title}</div>
-                <div><span className="font-medium">תיאור: </span>{subtitle}</div>
-                <div><span className="font-medium">קבוצה: </span>{report.group ?? "—"}</div>
-                <div><span className="font-medium">סטטוס: </span>{report.status === "published" ? "פורסם" : "טיוטה"}</div>
+                <div>
+                  <span className="font-medium">כותרת: </span>
+                  {title}
+                </div>
+                <div>
+                  <span className="font-medium">תיאור: </span>
+                  {subtitle}
+                </div>
+                <div>
+                  <span className="font-medium">סטטוס: </span>
+                  {report.status === "published" ? "פורסם" : "טיוטה"}
+                </div>
               </div>
             </div>
 
+            {content.forecast && (
+              <ForecastSection value={content.forecast} readOnly />
+            )}
+            {content.archive && (
+              <ArchiveSection
+                value={content.archive}
+                extraDays={content.archiveExtraDays}
+                lastYearValue={content.lastYearArchive}
+                readOnly
+              />
+            )}
+
             <div className="flex justify-between">
-              <Button size="lg" variant="outline" onClick={() => setActiveSection("additional")} className="gap-2 text-base px-8" disabled={isSaving}>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("additional")}
+                className="gap-2 text-base px-8"
+                disabled={isSaving}
+              >
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לנתונים נוספים</span>
               </Button>

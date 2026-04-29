@@ -4,9 +4,13 @@ interface DailyReportLogoProps {
 
 export default function DailyReportLogo({ className = "" }: DailyReportLogoProps) {
   return (
-    <div className={`flex items-center space-x-3 lg:space-x-4 ${className}`}>
+    <div
+      className={`flex items-center space-x-3 lg:space-x-4 ${className}`}
+      role="img"
+      aria-label="דוח יומי"
+    >
       {/* Calendar Icon */}
-      <div className="relative">
+      <div className="relative" aria-hidden="true">
         <div className="w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg shadow-lg">
           <div className="w-full h-2 lg:h-3 xl:h-3 bg-gray-800 rounded-t-lg"></div>
           <div className="absolute -top-1 left-2 w-1 h-3 lg:h-4 xl:h-5 bg-gray-700 rounded-full"></div>

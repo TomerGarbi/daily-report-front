@@ -3,7 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, User, Home, FileText, BarChart3, CalendarDays } from "lucide-react";
+import { LogOut, User, Home, FileText, BarChart3, CalendarDays, Settings } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/useAuth";
 import DailyReportLogo from "@/components/DailyReportLogo";
 import { Button } from "@/components/ui/button";
@@ -18,21 +19,33 @@ import {
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Define your nav links here
+// Define your nav links here. Labels are resolved at render time via i18n.
 // ---------------------------------------------------------------------------
 const NAV_LINKS = [
-  { href: "/", label: "דף הבית", icon: Home },
-  { href: "/reports", label: "דוחות", icon: FileText },
-  { href: "/calendar", label: "לוח שנה", icon: CalendarDays },
-  { href: "/charts", label: "גרפים", icon: BarChart3 },
-];
+  { href: "/",         labelKey: "home",     icon: Home },
+  { href: "/reports",  labelKey: "reports",  icon: FileText },
+  { href: "/calendar", labelKey: "calendar", icon: CalendarDays },
+  { href: "/charts",   labelKey: "charts",   icon: BarChart3 },
+] as const;
+
+/**
+ * Settings link is only shown to admins or members of the IT-Admins AD group —
+ * the same audience that can mutate the station catalog server-side.
+ */
+const SETTINGS_LINK = { href: "/settings", labelKey: "settings", icon: Settings } as const;
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const t = useTranslations("navbar");
 
-  const displayName = user?.username ?? "משתמש";
+  const displayName = user?.username ?? t("user.fallback");
+
+  // Settings hub contains personal preferences (appearance, statuses,
+  // account) that every authenticated user should be able to access —
+  // admin-only sub-pages gate themselves internally.
+  const navLinks = user ? [...NAV_LINKS, SETTINGS_LINK] : NAV_LINKS;
 
   async function handleLogout() {
     await logout();
@@ -48,7 +61,7 @@ export default function Navbar() {
 
         {/* Nav buttons – right side */}
         <nav className="hidden md:flex items-center gap-1 ms-4">
-          {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+          {navLinks.map(({ href, labelKey, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -60,7 +73,7 @@ export default function Navbar() {
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              {label}
+              {t(`links.${labelKey}`)}
             </Link>
           ))}
         </nav>
@@ -71,7 +84,7 @@ export default function Navbar() {
         {/* Greeting + user icon – left side */}
         <div className="flex items-center gap-3">
           <span className="hidden sm:block text-xl text-muted-foreground">
-            שלום,{" "}
+            {t("user.greeting")}{" "}
             <span className="font-medium text-foreground">{displayName}</span>
           </span>
 
@@ -89,7 +102,7 @@ export default function Navbar() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium">{displayName}</span>
-                  <span className="text-xs text-muted-foreground">מחובר</span>
+                  <span className="text-xs text-muted-foreground">{t("user.online")}</span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -98,7 +111,7 @@ export default function Navbar() {
                 className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer gap-2"
               >
                 <LogOut className="h-4 w-4" />
-                התנתקות
+                {t("user.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

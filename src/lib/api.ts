@@ -6,7 +6,7 @@
  * Mutation functions receive a pre-bound `authFetch` and return typed data.
  */
 
-import { Report, ReportsResponse, ReportStatus, ReportContent } from "@/types/report";
+import { Report, ReportStatus, ReportContent, ArchiveData, LastYearArchiveData } from "@/types/report";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,8 +21,7 @@ export interface ReportStats {
 
 export interface CreateReportPayload {
   title: string;
-  description?: string;
-  group?: string;
+  description: string;
   status?: ReportStatus;
   content: ReportContent;
 }
@@ -112,21 +111,6 @@ export function parsePaginatedReports(json: unknown): PaginatedReports {
   return { reports: list, total: list.length, page: 1, limit: list.length, totalPages: 1, hasNextPage: false };
 }
 
-/** Full SWR fetcher: calls the URL with authFetch, throws on non-OK, returns normalised list. */
-export async function reportsFetcher(
-  url: string,
-  authFetch: (url: string) => Promise<Response>
-): Promise<Report[]> {
-  const res = await authFetch(url);
-  if (!res.ok) {
-    const err = new Error(`API error ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  const json: ReportsResponse | Report[] = await res.json();
-  return parseReportsList(json);
-}
-
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
 // These accept the authFetch function so they stay decoupled from React hooks.
 
@@ -212,7 +196,8 @@ export async function fetchLatestReport(
   authFetch: AuthFetchFn,
 ): Promise<Report | null> {
   // Step 1: get the most recent report ID from the list endpoint
-  const listRes = await authFetch("/api/v1/reports?limit=1&sort=-createdAt");
+  // API already sorts by createdAt desc by default
+  const listRes = await authFetch("/api/v1/reports?limit=1");
   if (!listRes.ok) return null;
   const listJson = await listRes.json();
   const reports = parseReportsList(listJson);
@@ -227,12 +212,32 @@ export async function fetchLatestReport(
   return normalizeReport(detailJson as Report);
 }
 
-/** GET /api/v1/reports/defaults — fetch default station data from the DB. */
-export async function fetchDefaultStations(
+/**
+ * GET /api/v1/reports/archive/yesterday — fetch yesterday's aggregated
+ * energy production + peak-hour weather. Used by the report's "archive"
+ * stepper section. Returns `null` on transport-level failure; `hasData`
+ * on the payload signals upstream-data availability for the empty state.
+ */
+export async function fetchYesterdayArchive(
   authFetch: AuthFetchFn,
-): Promise<ReportContent | null> {
-  const res = await authFetch("/api/v1/reports/defaults");
+): Promise<ArchiveData | null> {
+  const res = await authFetch("/api/v1/reports/archive/yesterday");
   if (!res.ok) return null;
   const json = await res.json();
-  return json as ReportContent;
+  return json as ArchiveData;
 }
+
+/**
+ * Fetch the same calendar day one year ago, for the report's archive
+ * year-over-year comparison panel.
+ */
+export async function fetchLastYearArchive(
+  authFetch: AuthFetchFn,
+): Promise<LastYearArchiveData | null> {
+  const res = await authFetch("/api/v1/reports/archive/last-year");
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json as LastYearArchiveData;
+}
+
+

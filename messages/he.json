@@ -1,0 +1,31 @@
+{
+  "navbar": {
+    "links": {
+      "home": "דף הבית",
+      "reports": "דוחות",
+      "calendar": "לוח שנה",
+      "charts": "גרפים",
+      "settings": "הגדרות"
+    },
+    "user": {
+      "fallback": "משתמש",
+      "greeting": "שלום,",      "online": "מחובר",      "logout": "התנתק"
+    }
+  },
+  "login": {
+    "logoLabel": "נוגה",
+    "welcome": "ברוך הבא",
+    "subtitle": "הכנס את פרטי ההתחברות שלך להמשך",
+    "username": {
+      "label": "שם משתמש",
+      "placeholder": "הכנס שם משתמש"
+    },
+    "password": {
+      "label": "סיסמה",
+      "placeholder": "הכנס סיסמה"
+    },
+    "submit": "כניסה",
+    "submitting": "מתחבר…",
+    "error": "שם משתמש או סיסמה שגויים"
+  }
+}

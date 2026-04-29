@@ -37,6 +37,9 @@ export function FieldSelect({
   bgColor = "bg-white",
 }: FieldSelectProps) {
   const id = React.useId();
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = error ? errorId : hint ? hintId : undefined;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
@@ -51,6 +54,9 @@ export function FieldSelect({
         <SelectPrimitive.Trigger
           id={id}
           dir="rtl"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          aria-required={required || undefined}
           className={cn(
             `flex w-full items-center justify-between rounded-xl border ${bgColor} px-3 py-2.5 text-sm shadow-sm outline-none`,
             "transition-colors duration-150",
@@ -95,8 +101,8 @@ export function FieldSelect({
         </SelectPrimitive.Portal>
       </SelectPrimitive.Root>
 
-      {error && <p className="text-xs text-rose-500">{error}</p>}
-      {!error && hint && <p className="text-xs text-slate-400">{hint}</p>}
+      {error && <p id={errorId} className="text-xs text-rose-500">{error}</p>}
+      {!error && hint && <p id={hintId} className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }

@@ -45,7 +45,11 @@ export default function AdminPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
+  const groups = user?.groups ?? [];
   const isAdmin = user?.role === "admin";
+  const canViewUsers = user?.role === "manager" || isAdmin || groups.includes("HR") || groups.includes("IT-Admins");
+  const canViewLogs = isAdmin || groups.includes("IT-Admins");
+  const canAccessAdmin = canViewUsers || canViewLogs;
 
   // ── Log state ──────────────────────────────────────────────────────────────
   const [logFilters, setLogFilters] = useState<LogFilters>(EMPTY_LOG_FILTERS);
@@ -150,16 +154,16 @@ export default function AdminPage() {
   }, [isLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && !isAdmin) {
+    if (!isLoading && isAuthenticated && !canAccessAdmin) {
       router.replace("/");
     }
-  }, [isLoading, isAuthenticated, isAdmin, router]);
+  }, [isLoading, isAuthenticated, canAccessAdmin, router]);
 
   if (isLoading) {
     return <FullPageSpinner label="טוען ניהול…" />;
   }
 
-  if (!isAuthenticated || !isAdmin) return null;
+  if (!isAuthenticated || !canAccessAdmin) return null;
 
   const overviewLoading = userStatsLoading || logStatsLoading || reportStatsLoading;
 
@@ -196,14 +200,18 @@ export default function AdminPage() {
               <LayoutDashboard className="h-4 w-4" />
               סקירה כללית
             </TabsTrigger>
-            <TabsTrigger value="users" className="gap-1.5 rounded-xl px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              <Users className="h-4 w-4" />
-              משתמשים
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="gap-1.5 rounded-xl px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-              <ScrollText className="h-4 w-4" />
-              יומן מערכת
-            </TabsTrigger>
+            {canViewUsers && (
+              <TabsTrigger value="users" className="gap-1.5 rounded-xl px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <Users className="h-4 w-4" />
+                משתמשים
+              </TabsTrigger>
+            )}
+            {canViewLogs && (
+              <TabsTrigger value="logs" className="gap-1.5 rounded-xl px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <ScrollText className="h-4 w-4" />
+                יומן מערכת
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ── Overview tab ─────────────────────────────────────────── */}

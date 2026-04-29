@@ -8,12 +8,13 @@ import {
   useState,
 } from "react";
 import type { AuthContextValue, LoginCredentials, User } from "@/types/auth";
+import { env } from "@/lib/env";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = env.API_URL;
 
 /** Decode only the `exp` claim from a JWT (the only claim we read client-side). */
 function getExpFromToken(token: string): number | null {

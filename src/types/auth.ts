@@ -1,4 +1,6 @@
-export type Role = "guest" | "user" | "manager" | "admin";
+import type { UserRole } from "./user";
+
+export type Role = UserRole;
 
 export interface User {
   username: string;

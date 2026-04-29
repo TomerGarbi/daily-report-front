@@ -1,0 +1,33 @@
+{
+  "navbar": {
+    "links": {
+      "home": "Home",
+      "reports": "Reports",
+      "calendar": "Calendar",
+      "charts": "Charts",
+      "settings": "Settings"
+    },
+    "user": {
+      "fallback": "User",
+      "greeting": "Hello,",
+      "online": "Online",
+      "logout": "Sign out"
+    }
+  },
+  "login": {
+    "logoLabel": "Noga",
+    "welcome": "Welcome",
+    "subtitle": "Enter your credentials to continue",
+    "username": {
+      "label": "Username",
+      "placeholder": "Enter username"
+    },
+    "password": {
+      "label": "Password",
+      "placeholder": "Enter password"
+    },
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "error": "Invalid username or password"
+  }
+}

@@ -13,12 +13,15 @@ export interface FieldTextProps
 }
 
 const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
-  ({ label, error, hint, startIcon, bgColor = "bg-white", className, id, required, ...props }, ref) => {
+  ({ label, error, hint, startIcon, bgColor = "bg-white", className, id, required, dir, ...props }, ref) => {
     const generatedId = React.useId();
     const inputId = id ?? generatedId;
+    const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
+    const describedBy = error ? errorId : hint ? hintId : undefined;
 
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-0.5" dir={dir}>
         {label && (
           <label
             htmlFor={inputId}
@@ -37,7 +40,11 @@ const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
           )}
           <input
             ref={ref}
+            dir={dir}
             id={inputId}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            aria-required={required || undefined}
             className={cn(
               `w-full rounded-xl border ${bgColor} px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none`,
               "placeholder:text-slate-400",
@@ -53,8 +60,8 @@ const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
           />
         </div>
 
-        {error && <p className="text-xs text-rose-500">{error}</p>}
-        {!error && hint && <p className="text-xs text-slate-400">{hint}</p>}
+        {error && <p id={errorId} className="text-xs text-rose-500">{error}</p>}
+        {!error && hint && <p id={hintId} className="text-xs text-slate-400">{hint}</p>}
       </div>
     );
   }

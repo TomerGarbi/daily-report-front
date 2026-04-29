@@ -28,6 +28,8 @@ export function FieldCheckbox({
   bgColor = "bg-white",
 }: FieldCheckboxProps) {
   const id = React.useId();
+  const errorId = `${id}-error`;
+  const describedBy = error ? errorId : undefined;
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -38,6 +40,8 @@ export function FieldCheckbox({
           onCheckedChange={onCheckedChange}
           disabled={disabled}
           required={required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
           className={cn(
             `flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${bgColor} outline-none`,
             "transition-colors duration-150",
@@ -76,7 +80,7 @@ export function FieldCheckbox({
         </div>
       </div>
 
-      {error && <p className="ms-8 text-xs text-rose-500">{error}</p>}
+      {error && <p id={errorId} className="ms-8 text-xs text-rose-500">{error}</p>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,7 @@ interface ReportRowActionsProps {
   onDelete?: (reportId: string) => void;
 }
 
-export function ReportRowActions({ reportId, reportAuthor, onDelete }: ReportRowActionsProps) {
+function ReportRowActionsImpl({ reportId, reportAuthor, onDelete }: ReportRowActionsProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -93,3 +93,9 @@ export function ReportRowActions({ reportId, reportAuthor, onDelete }: ReportRow
     </div>
   );
 }
+
+/**
+ * Memoized wrapper — re-renders only when the row's own props change,
+ * not when the parent table re-renders for unrelated reasons.
+ */
+export const ReportRowActions = memo(ReportRowActionsImpl);

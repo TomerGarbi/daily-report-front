@@ -73,7 +73,7 @@ export function reportToEvent(r: Report): CalEvent {
     time:     d.toTimeString().slice(0, 5),
     status:   r.status === "published" ? "published" : "draft",
     author:   extractString(r.createdBy as unknown, "—"),
-    category: extractString(r.group as unknown, "כללי"),
+    category: "כללי",
     reportId: r.id,
   };
 }

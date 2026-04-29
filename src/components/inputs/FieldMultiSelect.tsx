@@ -38,6 +38,9 @@ export function FieldMultiSelect({
   bgColor = "bg-white",
 }: FieldMultiSelectProps) {
   const id = React.useId();
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = error ? errorId : hint ? hintId : undefined;
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -65,7 +68,7 @@ export function FieldMultiSelect({
     onChange(allChecked ? [] : allValues);
   }
 
-  function removeChip(val: string, e: React.MouseEvent) {
+  function removeChip(val: string, e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
     onChange?.(value.filter((v) => v !== val));
   }
@@ -86,8 +89,11 @@ export function FieldMultiSelect({
         id={id}
         type="button"
         dir="rtl"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        aria-required={required || undefined}        onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
           `flex h-[42px] w-full items-center rounded-xl border ${bgColor} px-3 shadow-sm outline-none text-sm`,
           "transition-colors duration-150",
@@ -118,7 +124,7 @@ export function FieldMultiSelect({
                   role="button"
                   tabIndex={0}
                   onClick={(e) => removeChip(opt.value, e)}
-                  onKeyDown={(e) => e.key === "Enter" && removeChip(opt.value, e as any)}
+                  onKeyDown={(e) => e.key === "Enter" && removeChip(opt.value, e)}
                   className="rounded-full hover:bg-orange-200 cursor-pointer"
                 >
                   <X className="h-3 w-3" />
@@ -194,8 +200,8 @@ export function FieldMultiSelect({
         </div>
       )}
 
-      {error && <p className="text-xs text-rose-500">{error}</p>}
-      {!error && hint && <p className="text-xs text-slate-400">{hint}</p>}
+      {error && <p id={errorId} className="text-xs text-rose-500">{error}</p>}
+      {!error && hint && <p id={hintId} className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
