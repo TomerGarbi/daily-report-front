@@ -17,34 +17,25 @@ import { Button } from "@/components/ui/button";
 import type { WeatherDay, WeatherSource } from "@/types/report";
 import type { WeatherSnapshot } from "@/types/weather";
 
-export type WeatherAccent = "sky" | "cyan";
+export type WeatherAccent = "orange" | "slate";
 
 const ACCENTS: Record<
   WeatherAccent,
   {
     headerBg: string;
-    iconGradient: string;
-    stripe: string;
-    statBg: string;
-    statRing: string;
+    iconBg: string;
     statValue: string;
   }
 > = {
-  sky: {
-    headerBg:    "bg-gradient-to-l from-sky-50 via-blue-50 to-cyan-50",
-    iconGradient:"bg-gradient-to-br from-sky-500 via-blue-500 to-cyan-500",
-    stripe:      "bg-gradient-to-l from-sky-400 via-blue-400 to-cyan-400",
-    statBg:      "bg-sky-50/60",
-    statRing:    "ring-sky-100",
-    statValue:   "text-sky-700",
+  orange: {
+    headerBg:  "bg-orange-50",
+    iconBg:    "bg-orange-500",
+    statValue: "text-orange-700",
   },
-  cyan: {
-    headerBg:    "bg-gradient-to-l from-cyan-50 via-teal-50 to-emerald-50",
-    iconGradient:"bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-500",
-    stripe:      "bg-gradient-to-l from-cyan-400 via-teal-400 to-emerald-400",
-    statBg:      "bg-cyan-50/60",
-    statRing:    "ring-cyan-100",
-    statValue:   "text-cyan-700",
+  slate: {
+    headerBg:  "bg-slate-50",
+    iconBg:    "bg-slate-700",
+    statValue: "text-slate-700",
   },
 };
 
@@ -67,14 +58,14 @@ export interface WeatherCardProps {
 const sourceLabel = (s: WeatherSource): string => (s === "db" ? "מהמערכת" : "ידני");
 const sourceClass = (s: WeatherSource): string =>
   s === "db"
-    ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
-    : "bg-amber-100 text-amber-700 ring-amber-200";
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : "bg-amber-50 text-amber-700 ring-amber-200";
 
 export function WeatherCard({
   dayLabel,
   value,
   source,
-  accent = "sky",
+  accent = "orange",
   dbSnapshot,
   isLoading,
   hasError,
@@ -126,8 +117,8 @@ export function WeatherCard({
   const numberValue = (n: number) => (Number.isFinite(n) && n !== 0 ? String(n) : n === 0 ? "0" : "");
 
   const Header = (
-    <div className={`flex items-center gap-2 px-5 pt-4 pb-3 ${a.headerBg} border-b border-slate-100`}>
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.iconGradient} text-white shadow`}>
+    <div className={`flex items-center gap-2 px-5 pt-4 pb-3 ${a.headerBg} border-b border-slate-200`}>
+      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.iconBg} text-white shadow-sm`}>
         <CloudSun className="h-4 w-4" />
       </span>
       <h4 className="text-sm font-semibold text-slate-800">מזג אוויר — {dayLabel}</h4>
@@ -154,11 +145,10 @@ export function WeatherCard({
       Icon: typeof Thermometer,
       label: string,
       val: string | number,
-      tone: string,
       suffix?: string,
     ) => (
-      <div className={`rounded-xl ${a.statBg} ring-1 ${a.statRing} p-3 flex items-start gap-3`}>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone} text-white shadow-sm shrink-0`}>
+      <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3 flex items-start gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 text-slate-500 shrink-0">
           <Icon className="h-4 w-4" />
         </span>
         <div>
@@ -171,13 +161,12 @@ export function WeatherCard({
       </div>
     );
     return (
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
-        <div className={`absolute inset-x-0 top-0 h-1 ${a.stripe}`} />
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
         {Header}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4">
-          {stat(Thermometer, "טמפרטורה",          value.temperatureC, "bg-rose-500",    "°C")}
-          {stat(Wind,        "טמפרטורה מורגשת",   value.feelsLikeC,   "bg-orange-500",  "°C")}
-          {stat(Droplets,    "לחות",              value.humidityPct,  "bg-blue-500",    "%")}
+          {stat(Thermometer, "טמפרטורה",          value.temperatureC, "°C")}
+          {stat(Wind,        "טמפרטורה מורגשת",   value.feelsLikeC,   "°C")}
+          {stat(Droplets,    "לחות",              value.humidityPct,  "%")}
         </div>
       </div>
     );
@@ -186,8 +175,7 @@ export function WeatherCard({
   const showNotFoundHint = !isLoading && !hasError && !dbSnapshot && source === "db";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
-      <div className={`absolute inset-x-0 top-0 h-1 ${a.stripe}`} />
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
       {Header}
 
       <div className="p-5 space-y-4">
@@ -205,7 +193,7 @@ export function WeatherCard({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FieldText
             label="טמפרטורה (°C)"
-            startIcon={<Thermometer className="h-4 w-4 text-rose-500" />}
+            startIcon={<Thermometer className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="decimal"
             step="any"
@@ -218,7 +206,7 @@ export function WeatherCard({
           />
           <FieldText
             label="טמפרטורה מורגשת (°C)"
-            startIcon={<Wind className="h-4 w-4 text-orange-500" />}
+            startIcon={<Wind className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="decimal"
             step="any"
@@ -231,7 +219,7 @@ export function WeatherCard({
           />
           <FieldText
             label="לחות (%)"
-            startIcon={<Droplets className="h-4 w-4 text-blue-500" />}
+            startIcon={<Droplets className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="numeric"
             step="any"

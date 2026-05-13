@@ -269,7 +269,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
 
       const maxStation = rows.reduce((max, r) => Math.max(max, r.stationNumber), 0);
       const newRow: StationRow = {
-        stationNumber:             maxStation + 1,
+        stationNumber:             Number(unit.tag) || maxStation + 1,
         installedCapacity:         Number(unit.installedCapacity) || 0,
         availableCapacity:         0,
         peakCapacity:              0,
@@ -295,6 +295,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
     let peak = 0;
     let minReserve = 0;
     let secondaryFuel = 0;
+    const byStatus: Record<string, { count: number; installed: number; available: number; peak: number; minReserve: number; secondaryFuel: number }> = {};
     for (const rows of Object.values(data)) {
       for (const row of rows) {
         installed += Number(row.installedCapacity) || 0;
@@ -302,23 +303,34 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
         peak += Number(row.peakCapacity) || 0;
         minReserve += Number(row.minReserveCapacity) || 0;
         secondaryFuel += Number(row.secondaryFuelPeakCapacity) || 0;
+        const s = row.status;
+        if (!byStatus[s]) byStatus[s] = { count: 0, installed: 0, available: 0, peak: 0, minReserve: 0, secondaryFuel: 0 };
+        byStatus[s].count += 1;
+        byStatus[s].installed += Number(row.installedCapacity) || 0;
+        byStatus[s].available += Number(row.availableCapacity) || 0;
+        byStatus[s].peak += Number(row.peakCapacity) || 0;
+        byStatus[s].minReserve += Number(row.minReserveCapacity) || 0;
+        byStatus[s].secondaryFuel += Number(row.secondaryFuelPeakCapacity) || 0;
       }
     }
-    return { installed, available, peak, minReserve, secondaryFuel, degradation: installed - available };
+    return { installed, available, peak, minReserve, secondaryFuel, degradation: installed - available, byStatus };
   }, [data]);
 
   return (
     <div className="space-y-3">
-    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+    <div className="rounded-2xl bg-white border border-slate-200 shadow-xl ring-1 ring-slate-900/5 overflow-hidden">
       {title && (
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between" dir="rtl">
-          <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+        <div className="px-5 py-4 bg-orange-500 flex items-center justify-between" dir="rtl">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" />
+            <h3 className="text-base font-bold text-white">{title}</h3>
+          </div>
           {canEdit && (
             <Button
-              variant={editing ? "default" : "outline"}
+              variant="outline"
               size="sm"
               onClick={() => setEditing((v) => !v)}
-              className={editing ? "gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" : "gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"}
+              className="gap-1.5 bg-white text-orange-600 border-white hover:bg-orange-50 hover:text-orange-700"
             >
               {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
               {editing ? "סיום עריכה" : "ערוך טבלה"}
@@ -329,15 +341,15 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       <div className="overflow-x-auto">
         <table className="w-full text-base" dir="rtl">
           <thead>
-            <tr className="bg-orange-500">
+            <tr className="bg-white border-b-2 border-slate-400">
               {COL_HEADERS.map((h) => (
                 <th
                   key={h.label}
-                  className="px-2 py-2 text-center text-xs font-semibold text-white min-w-[56px]"
+                  className="px-2 py-3 text-center text-xs font-bold text-orange-600 min-w-[56px]"
                 >
                   {h.label}
                   {h.sub && (
-                    <div className="font-semibold opacity-90 mt-0.5">{h.sub}</div>
+                    <div className="font-semibold text-orange-500/80 mt-0.5">{h.sub}</div>
                   )}
                 </th>
               ))}
@@ -351,7 +363,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                 <tr
                   key={`${group}-${row.stationNumber}`}
                   className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors  ${
-                    rowIdx === rows.length - 1 ? "border-b-slate-200" : ""
+                    rowIdx === rows.length - 1 && !editing ? "border-b-2 border-b-slate-400" : ""
                   }`}
                 >
                   {/* שם יחידה — merged, read-only */}
@@ -569,7 +581,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
               )).concat(
                 editing
                   ? [
-                      <tr key={`${group}-add`} className="border-b border-slate-200">
+                      <tr key={`${group}-add`} className="border-b-2 border-b-slate-400">
                         <td colSpan={COL_HEADERS.length - 1} className="px-4 py-2 text-center">
                           <Button
                             variant="ghost"
@@ -587,20 +599,77 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
               );
             })}
           </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-orange-300 font-bold" style={{ backgroundColor: "#FFEDD5", color: "#C2410C" }}>
-              <td colSpan={2} className="px-4 py-2 text-center text-sm">סה״כ</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.installed}</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.available}</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.peak}</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.minReserve}</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.secondaryFuel}</td>
-              <td className="px-2 py-2 text-center text-sm">{totals.degradation}</td>
-              <td colSpan={5} />
-            </tr>
-          </tfoot>
+
         </table>
       </div>
+
+      {/* ── Status breakdown panel ── */}
+      {(() => {
+        const STATUS_ORDER = ["Active", "Maintenance", "Inactive"] as const;
+        const empty = { count: 0, installed: 0, available: 0, peak: 0, minReserve: 0, secondaryFuel: 0 };
+        const totalCount = Object.values(totals.byStatus).reduce((n, s) => n + s.count, 0);
+        return (
+          <div className="border-t border-slate-200 bg-white px-5 py-5" dir="rtl">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">פירוט לפי סטטוס</p>
+            <div className="flex flex-wrap gap-6">
+              {/* ── Total card ── */}
+              <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm px-5 py-4 flex flex-col gap-3 min-w-[240px]">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-block px-3 py-0.5 rounded-full text-sm font-semibold border bg-orange-500 text-white border-orange-500">סה״כ</span>
+                  <span className="text-sm text-slate-500 font-semibold">{totalCount} יחידות</span>
+                </div>
+                <div className="h-px bg-orange-100" />
+                <div className="grid grid-cols-4 gap-x-3 text-center">
+                  <div className="text-xs text-slate-400 font-medium">מותקנת</div>
+                  <div className="text-xs text-slate-400 font-medium">זמינה</div>
+                  <div className="text-xs text-slate-400 font-medium">מינ׳ רזרבה</div>
+                  <div className="text-xs text-slate-400 font-medium">התדרדרות</div>
+                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.installed}</div>
+                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.available}</div>
+                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.minReserve}</div>
+                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.degradation}</div>
+                </div>
+              </div>
+              {/* ── Per-status cards ── */}
+              {STATUS_ORDER.map((status) => {
+                const s = totals.byStatus[status] ?? empty;
+                const valueColor =
+                  status === "Active"
+                    ? "text-emerald-600"
+                    : status === "Maintenance"
+                    ? "text-amber-500"
+                    : "text-red-500";
+                return (
+                  <div
+                    key={`card-${status}`}
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex flex-col gap-3 min-w-[240px]"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`inline-block px-3 py-0.5 rounded-full text-sm font-semibold border ${colorFor(status)}`}
+                      >
+                        {labelFor(status)}
+                      </span>
+                      <span className="text-sm text-slate-500 font-semibold">{s.count} יחידות</span>
+                    </div>
+                    <div className="h-px bg-slate-100" />
+                    <div className="grid grid-cols-4 gap-x-3 text-center">
+                      <div className="text-xs text-slate-400 font-medium">מותקנת</div>
+                      <div className="text-xs text-slate-400 font-medium">זמינה</div>
+                      <div className="text-xs text-slate-400 font-medium">מינ׳ רזרבה</div>
+                      <div className="text-xs text-slate-400 font-medium">התדרדרות</div>
+                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.installed}</div>
+                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.available}</div>
+                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.minReserve}</div>
+                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.installed - s.available}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Add station group ── */}
       {editing && (

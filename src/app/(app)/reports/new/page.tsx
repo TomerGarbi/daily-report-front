@@ -327,7 +327,7 @@ export default function NewReportPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-slate-100" dir="rtl">
       <StepperHeader
         icon={FileText}
         title={title}

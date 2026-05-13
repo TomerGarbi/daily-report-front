@@ -63,15 +63,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // -------------------------------------------------------------------------
-  // Schedule a proactive refresh ~30s before the token expires
+  // Schedule a proactive refresh ~30s before the token expires.
+  // The API now returns an absolute `expiresAt` ISO timestamp on /login and
+  // /refresh; when present we use it directly (more robust to client clock
+  // drift than decoding the JWT). We fall back to decoding the token if the
+  // server didn't include `expiresAt` (e.g. older API).
   // -------------------------------------------------------------------------
   const scheduleRefresh = useCallback(
-    (token: string) => {
+    (token: string, expiresAt?: string | null) => {
       clearRefreshTimer();
-      const exp = getExpFromToken(token);
-      if (exp === null) return;
 
-      const msUntilExpiry = exp * 1000 - Date.now();
+      let expMs: number | null = null;
+      if (expiresAt) {
+        const parsed = Date.parse(expiresAt);
+        if (!Number.isNaN(parsed)) expMs = parsed;
+      }
+      if (expMs === null) {
+        const exp = getExpFromToken(token);
+        if (exp !== null) expMs = exp * 1000;
+      }
+      if (expMs === null) return;
+
+      const msUntilExpiry = expMs - Date.now();
       const refreshIn = msUntilExpiry - 30_000; // 30s before expiry
 
       if (refreshIn <= 0) {
@@ -108,9 +121,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return null;
         }
 
-        const data: { accessToken: string } = await res.json();
+        const data: { accessToken: string; expiresAt?: string | null } =
+          await res.json();
         setAccessToken(data.accessToken);
-        scheduleRefresh(data.accessToken);
+        scheduleRefresh(data.accessToken, data.expiresAt);
         return data.accessToken;
       } catch {
         clearRefreshTimer();
@@ -145,13 +159,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!res.ok) throw new Error("refresh failed");
 
-        const { accessToken: token }: { accessToken: string } =
-          await res.json();
+        const {
+          accessToken: token,
+          expiresAt,
+        }: { accessToken: string; expiresAt?: string | null } = await res.json();
 
         if (cancelled) return;
 
         setAccessToken(token);
-        scheduleRefresh(token);
+        scheduleRefresh(token, expiresAt);
 
         // Hydrate user from GET /auth/me — never decode from the token
         const me = await fetchMe(token);
@@ -192,10 +208,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      const data: { accessToken: string; user: User } = await res.json();
+      const data: { accessToken: string; expiresAt?: string | null; user: User } =
+        await res.json();
 
       setAccessToken(data.accessToken);
-      scheduleRefresh(data.accessToken);
+      scheduleRefresh(data.accessToken, data.expiresAt);
 
       // Hydrate user from GET /auth/me (authoritative source)
       const me = await fetchMe(data.accessToken);

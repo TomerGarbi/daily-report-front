@@ -35,7 +35,7 @@ export function seedTypeFromCatalog(
     const fuel = s.fuel as StationFuel;
     const bucket = (out[fuel] ??= {});
     bucket[s.name] = s.units.map((u, idx) => ({
-      stationNumber:             idx + 1,
+      stationNumber:             Number(u.tag) || idx + 1,
       installedCapacity:         u.installedCapacity,
       availableCapacity:         0,
       peakCapacity:              0,

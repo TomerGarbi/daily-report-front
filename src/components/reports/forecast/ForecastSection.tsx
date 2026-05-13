@@ -32,25 +32,25 @@ export interface ForecastSectionProps {
 
 const REGION = "gush-dan";
 
-/** Per-day theme — drives the column header gradient + accent colors. */
+/** Per-day theme — single accent color, no gradients. */
 const DAY_THEMES = {
   today: {
     icon: Sun,
     label: "היום",
-    headerGradient: "from-orange-500 via-amber-500 to-yellow-500",
-    headerRing: "ring-orange-200",
-    headerBg: "bg-gradient-to-l from-orange-50 via-amber-50 to-yellow-50",
+    iconBg: "bg-orange-500",
+    headerBg: "bg-orange-50",
+    headerBorder: "border-orange-100",
     loadAccent: "orange" as const,
-    weatherAccent: "sky" as const,
+    weatherAccent: "orange" as const,
   },
   tomorrow: {
     icon: Moon,
     label: "מחר",
-    headerGradient: "from-indigo-500 via-violet-500 to-purple-500",
-    headerRing: "ring-indigo-200",
-    headerBg: "bg-gradient-to-l from-indigo-50 via-violet-50 to-purple-50",
-    loadAccent: "violet" as const,
-    weatherAccent: "cyan" as const,
+    iconBg: "bg-slate-700",
+    headerBg: "bg-slate-50",
+    headerBorder: "border-slate-200",
+    loadAccent: "slate" as const,
+    weatherAccent: "slate" as const,
   },
 };
 
@@ -114,11 +114,11 @@ export function ForecastSection({ value, onChange, readOnly, errors }: ForecastS
     return (
       <div className="space-y-4">
         <div
-          className={`relative overflow-hidden rounded-2xl ${theme.headerBg} ring-1 ${theme.headerRing} px-4 py-3 shadow-sm`}
+          className={`rounded-2xl ${theme.headerBg} border ${theme.headerBorder} px-4 py-3`}
         >
           <div className="flex items-center gap-3">
             <span
-              className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${theme.headerGradient} text-white shadow-md`}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl ${theme.iconBg} text-white shadow-sm`}
             >
               <Icon className="h-5 w-5" />
             </span>
@@ -156,15 +156,14 @@ export function ForecastSection({ value, onChange, readOnly, errors }: ForecastS
   return (
     <div className="space-y-6" dir="rtl">
       {!readOnly && (
-        <div className="relative overflow-hidden rounded-2xl bg-orange-500 p-5 shadow-md">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.2),transparent_60%)] pointer-events-none" />
-          <div className="relative flex items-start gap-3 text-white">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/30 backdrop-blur">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm shrink-0">
               <TrendingUp className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-base font-bold">תחזית להיום ולמחר</h2>
-              <p className="text-xs text-white/85 mt-0.5">
+              <h2 className="text-base font-bold text-slate-800">תחזית להיום ולמחר</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
                 תחזית עומס ומזג אוויר (אזור גוש דן). הנתונים נטענים אוטומטית מהמערכת
                 וניתן לערוך אותם ידנית לפני שמירה.
               </p>

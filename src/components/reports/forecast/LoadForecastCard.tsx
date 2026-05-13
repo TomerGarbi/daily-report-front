@@ -11,34 +11,25 @@ import { TrendingUp, Flame, AlarmClock, Activity, Clock } from "lucide-react";
 import { FieldText } from "@/components/inputs/FieldText";
 import type { LoadForecastDay } from "@/types/report";
 
-export type LoadAccent = "orange" | "violet";
+export type LoadAccent = "orange" | "slate";
 
 const ACCENTS: Record<
   LoadAccent,
   {
     headerBg: string;
-    iconGradient: string;
-    stripe: string;
-    statBg: string;
-    statRing: string;
+    iconBg: string;
     statValue: string;
   }
 > = {
   orange: {
-    headerBg:    "bg-gradient-to-l from-orange-50 via-amber-50 to-rose-50",
-    iconGradient:"bg-gradient-to-br from-orange-500 via-amber-500 to-rose-500",
-    stripe:      "bg-gradient-to-l from-orange-400 via-amber-400 to-rose-400",
-    statBg:      "bg-orange-50/60",
-    statRing:    "ring-orange-100",
-    statValue:   "text-orange-700",
+    headerBg:  "bg-orange-50",
+    iconBg:    "bg-orange-500",
+    statValue: "text-orange-700",
   },
-  violet: {
-    headerBg:    "bg-gradient-to-l from-violet-50 via-fuchsia-50 to-indigo-50",
-    iconGradient:"bg-gradient-to-br from-violet-500 via-fuchsia-500 to-indigo-500",
-    stripe:      "bg-gradient-to-l from-violet-400 via-fuchsia-400 to-indigo-400",
-    statBg:      "bg-violet-50/60",
-    statRing:    "ring-violet-100",
-    statValue:   "text-violet-700",
+  slate: {
+    headerBg:  "bg-slate-50",
+    iconBg:    "bg-slate-700",
+    statValue: "text-slate-700",
   },
 };
 
@@ -71,8 +62,8 @@ export function LoadForecastCard({
   const numberValue = (n: number) => (Number.isFinite(n) && n !== 0 ? String(n) : n === 0 ? "0" : "");
 
   const Header = (
-    <div className={`flex items-center gap-2 px-5 pt-4 pb-3 ${a.headerBg} border-b border-slate-100`}>
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.iconGradient} text-white shadow`}>
+    <div className={`flex items-center gap-2 px-5 pt-4 pb-3 ${a.headerBg} border-b border-slate-200`}>
+      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.iconBg} text-white shadow-sm`}>
         <TrendingUp className="h-4 w-4" />
       </span>
       <h4 className="text-sm font-semibold text-slate-800">תחזית עומס — {dayLabel}</h4>
@@ -84,10 +75,9 @@ export function LoadForecastCard({
       Icon: typeof Flame,
       label: string,
       val: string | number,
-      tone: string,
     ) => (
-      <div className={`rounded-xl ${a.statBg} ring-1 ${a.statRing} p-3 flex items-start gap-3`}>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone} text-white shadow-sm shrink-0`}>
+      <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3 flex items-start gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 text-slate-500 shrink-0">
           <Icon className="h-4 w-4" />
         </span>
         <div>
@@ -98,28 +88,26 @@ export function LoadForecastCard({
     );
 
     return (
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
-        <div className={`absolute inset-x-0 top-0 h-1 ${a.stripe}`} />
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
         {Header}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
-          {stat(Flame,      "תחזית עומס (MW)",               value.value,                       "bg-rose-500")}
-          {stat(Clock,      "שעת שיא",                        value.peakHour || "—",             "bg-amber-500")}
-          {stat(Activity,   "עומס בשעת רזרבה מינימלית (MW)", value.minReserveValue,             "bg-emerald-500")}
-          {stat(AlarmClock, "שעת רזרבה מינימלית",            value.minReserveHour || "—",       "bg-sky-500")}
+          {stat(Flame,      "תחזית עומס (MW)",               value.value)}
+          {stat(Clock,      "שעת שיא",                        value.peakHour || "—")}
+          {stat(Activity,   "עומס בשעת רזרבה מינימלית (MW)", value.minReserveValue)}
+          {stat(AlarmClock, "שעת רזרבה מינימלית",            value.minReserveHour || "—")}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
-      <div className={`absolute inset-x-0 top-0 h-1 ${a.stripe}`} />
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
       {Header}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5">
         <FieldText
           label="תחזית עומס (MW)"
-          startIcon={<Flame className="h-4 w-4 text-rose-500" />}
+          startIcon={<Flame className="h-4 w-4 text-slate-400" />}
           type="number"
           inputMode="decimal"
           min={0}
@@ -131,7 +119,7 @@ export function LoadForecastCard({
         />
         <FieldText
           label="שעת שיא"
-          startIcon={<Clock className="h-4 w-4 text-amber-500" />}
+          startIcon={<Clock className="h-4 w-4 text-slate-400" />}
           type="time"
           required
           value={value.peakHour}
@@ -140,7 +128,7 @@ export function LoadForecastCard({
         />
         <FieldText
           label="עומס בשעת רזרבה מינימלית (MW)"
-          startIcon={<Activity className="h-4 w-4 text-emerald-500" />}
+          startIcon={<Activity className="h-4 w-4 text-slate-400" />}
           type="number"
           inputMode="decimal"
           min={0}
@@ -152,7 +140,7 @@ export function LoadForecastCard({
         />
         <FieldText
           label="שעת רזרבה מינימלית"
-          startIcon={<AlarmClock className="h-4 w-4 text-sky-500" />}
+          startIcon={<AlarmClock className="h-4 w-4 text-slate-400" />}
           type="time"
           required
           value={value.minReserveHour}
