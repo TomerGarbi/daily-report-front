@@ -10,7 +10,7 @@
  */
 
 import { useCallback } from "react";
-import { Sun, Moon, TrendingUp } from "lucide-react";
+import { CalendarDays, MapPin, Moon, Sun, TrendingUp } from "lucide-react";
 import { useWeatherForecast } from "@/hooks/useWeatherForecast";
 import { LoadForecastCard } from "./LoadForecastCard";
 import { WeatherCard } from "./WeatherCard";
@@ -37,18 +37,24 @@ const DAY_THEMES = {
   today: {
     icon: Sun,
     label: "היום",
+    eyebrow: "יום נוכחי",
     iconBg: "bg-orange-500",
-    headerBg: "bg-orange-50",
-    headerBorder: "border-orange-100",
+    iconText: "text-white",
+    headerBg: "bg-white",
+    headerBorder: "border-orange-200",
+    rail: "bg-orange-500",
     loadAccent: "orange" as const,
     weatherAccent: "orange" as const,
   },
   tomorrow: {
     icon: Moon,
     label: "מחר",
-    iconBg: "bg-slate-700",
-    headerBg: "bg-slate-50",
+    eyebrow: "יום הבא",
+    iconBg: "bg-orange-50",
+    iconText: "text-orange-600",
+    headerBg: "bg-white",
     headerBorder: "border-slate-200",
+    rail: "bg-slate-300",
     loadAccent: "slate" as const,
     weatherAccent: "slate" as const,
   },
@@ -105,6 +111,7 @@ export function ForecastSection({ value, onChange, readOnly, errors }: ForecastS
           temperatureC: errors[`weather.${day}.temperatureC`],
           feelsLikeC:   errors[`weather.${day}.feelsLikeC`],
           humidityPct:  errors[`weather.${day}.humidityPct`],
+          description:  errors[`weather.${day}.description`],
         }
       : undefined;
 
@@ -114,17 +121,19 @@ export function ForecastSection({ value, onChange, readOnly, errors }: ForecastS
     return (
       <div className="space-y-4">
         <div
-          className={`rounded-2xl ${theme.headerBg} border ${theme.headerBorder} px-4 py-3`}
+          className={`relative overflow-hidden rounded-xl ${theme.headerBg} border ${theme.headerBorder} px-5 py-4 shadow-sm`}
         >
-          <div className="flex items-center gap-3">
+          <span className={`absolute inset-y-0 right-0 w-1 ${theme.rail}`} />
+          <div className="flex items-center gap-3 pr-2">
             <span
-              className={`flex h-10 w-10 items-center justify-center rounded-xl ${theme.iconBg} text-white shadow-sm`}
+              className={`flex h-10 w-10 items-center justify-center rounded-lg ${theme.iconBg} ${theme.iconText} ring-1 ring-orange-100`}
             >
               <Icon className="h-5 w-5" />
             </span>
-            <div>
-              <h3 className="text-base font-bold text-slate-800">{theme.label}</h3>
-              <p className="text-xs text-slate-500">תחזית עומס ומזג אוויר</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-orange-600">{theme.eyebrow}</p>
+              <h3 className="text-lg font-bold leading-tight text-slate-900">{theme.label}</h3>
+              <p className="mt-0.5 text-sm text-slate-500">תחזית עומס ומזג אוויר</p>
             </div>
           </div>
         </div>
@@ -156,23 +165,48 @@ export function ForecastSection({ value, onChange, readOnly, errors }: ForecastS
   return (
     <div className="space-y-6" dir="rtl">
       {!readOnly && (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm shrink-0">
-              <TrendingUp className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-base font-bold text-slate-800">תחזית להיום ולמחר</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                תחזית עומס ומזג אוויר (אזור גוש דן). הנתונים נטענים אוטומטית מהמערכת
-                וניתן לערוך אותם ידנית לפני שמירה.
-              </p>
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm">
+                <TrendingUp className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-orange-600">שלב תחזית</p>
+                <h2 className="text-lg font-bold leading-tight text-slate-900">תחזית להיום ולמחר</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  תחזית עומס ומזג אוויר. הנתונים נטענים מהמערכת וניתנים לעריכה ידנית לפני שמירה.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-orange-100 bg-orange-50 px-3 py-1.5 text-orange-700">
+                <MapPin className="h-3.5 w-3.5" />
+                גוש דן
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-600">
+                <CalendarDays className="h-3.5 w-3.5" />
+                היום ומחר
+              </span>
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {readOnly && (
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm">
+            <TrendingUp className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">תחזית להיום ולמחר</h2>
+            <p className="mt-0.5 text-sm text-slate-500">תחזית עומס ומזג אוויר</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {renderColumn("today")}
         {renderColumn("tomorrow")}
       </div>

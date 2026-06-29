@@ -54,15 +54,17 @@ function CalendarPanel({
   showTime?: boolean;
 }) {
   const today = new Date();
-  const init = selected ?? today;
+  const isValid = (d?: Date): d is Date =>
+    !!d && d instanceof Date && !Number.isNaN(d.getTime());
+  const init = isValid(selected) ? selected : today;
 
   const [view, setView] = React.useState<View>("cal");
   const [viewYear, setViewYear] = React.useState(init.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(init.getMonth());
 
-  const [hours, setHours] = React.useState(String(selected?.getHours() ?? 0).padStart(2, "0"));
-  const [minutes, setMinutes] = React.useState(String(selected?.getMinutes() ?? 0).padStart(2, "0"));
-  const [seconds, setSeconds] = React.useState(String(selected?.getSeconds() ?? 0).padStart(2, "0"));
+  const [hours, setHours] = React.useState(String(isValid(selected) ? selected.getHours() : 0).padStart(2, "0"));
+  const [minutes, setMinutes] = React.useState(String(isValid(selected) ? selected.getMinutes() : 0).padStart(2, "0"));
+  const [seconds, setSeconds] = React.useState(String(isValid(selected) ? selected.getSeconds() : 0).padStart(2, "0"));
 
   // Current year ± range for year dropdown
   const currentYear = today.getFullYear();
@@ -346,6 +348,10 @@ export function FieldDatePicker({
   const id = React.useId();
   const [open, setOpen] = React.useState(false);
 
+  // Treat an invalid Date (e.g. produced by `new Date("06:00")`) as no value.
+  const safeValue =
+    value && !Number.isNaN(value.getTime()) ? value : undefined;
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
@@ -373,12 +379,12 @@ export function FieldDatePicker({
               disabled && "cursor-not-allowed opacity-50"
             )}
           >
-            <span className={value ? "text-slate-800" : "text-slate-400"}>
-              {value ? fmt(value, showTime) : placeholder}
+            <span className={safeValue ? "text-slate-800" : "text-slate-400"}>
+              {safeValue ? fmt(safeValue, showTime) : placeholder}
             </span>
 
             <div className="flex items-center gap-1">
-              {value && (
+              {safeValue && (
                 <span
                   role="button"
                   tabIndex={0}
@@ -402,7 +408,7 @@ export function FieldDatePicker({
             className="z-50 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg outline-none"
           >
             <CalendarPanel
-              selected={value}
+              selected={safeValue}
               onSelect={(d) => onChange?.(d)}
               onClose={() => setOpen(false)}
               showTime={showTime}

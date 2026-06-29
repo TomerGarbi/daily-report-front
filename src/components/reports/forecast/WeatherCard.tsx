@@ -22,22 +22,30 @@ export type WeatherAccent = "orange" | "slate";
 const ACCENTS: Record<
   WeatherAccent,
   {
-    headerBg: string;
+    border: string;
+    eyebrow: string;
     iconBg: string;
+    iconText: string;
     statValue: string;
   }
 > = {
   orange: {
-    headerBg:  "bg-orange-50",
+    border:    "border-orange-100",
+    eyebrow:   "text-orange-600",
     iconBg:    "bg-orange-500",
-    statValue: "text-orange-700",
+    iconText:  "text-white",
+    statValue: "text-slate-900",
   },
   slate: {
-    headerBg:  "bg-slate-50",
-    iconBg:    "bg-slate-700",
-    statValue: "text-slate-700",
+    border:    "border-slate-200",
+    eyebrow:   "text-slate-500",
+    iconBg:    "bg-orange-50",
+    iconText:  "text-orange-600",
+    statValue: "text-slate-900",
   },
 };
+
+const FIELD_LABEL_CLASS = "flex min-h-10 items-end leading-5";
 
 export interface WeatherCardProps {
   dayLabel: string;
@@ -58,8 +66,8 @@ export interface WeatherCardProps {
 const sourceLabel = (s: WeatherSource): string => (s === "db" ? "מהמערכת" : "ידני");
 const sourceClass = (s: WeatherSource): string =>
   s === "db"
-    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-    : "bg-amber-50 text-amber-700 ring-amber-200";
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-amber-200 bg-amber-50 text-amber-700";
 
 export function WeatherCard({
   dayLabel,
@@ -91,6 +99,7 @@ export function WeatherCard({
         temperatureC: dbSnapshot.temperatureC,
         feelsLikeC:   dbSnapshot.feelsLikeC,
         humidityPct:  dbSnapshot.humidityPct,
+        description:  value.description ?? "",
       },
       "db",
     );
@@ -109,6 +118,7 @@ export function WeatherCard({
         temperatureC: dbSnapshot.temperatureC,
         feelsLikeC:   dbSnapshot.feelsLikeC,
         humidityPct:  dbSnapshot.humidityPct,
+        description:  value.description ?? "",
       },
       "db",
     );
@@ -117,26 +127,31 @@ export function WeatherCard({
   const numberValue = (n: number) => (Number.isFinite(n) && n !== 0 ? String(n) : n === 0 ? "0" : "");
 
   const Header = (
-    <div className={`flex items-center gap-2 px-5 pt-4 pb-3 ${a.headerBg} border-b border-slate-200`}>
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${a.iconBg} text-white shadow-sm`}>
+    <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.iconBg} ${a.iconText} ring-1 ring-orange-100`}>
         <CloudSun className="h-4 w-4" />
       </span>
-      <h4 className="text-sm font-semibold text-slate-800">מזג אוויר — {dayLabel}</h4>
-      <span className={`text-xs rounded-full px-2 py-0.5 ring-1 font-medium ${sourceClass(source)}`}>
-        {sourceLabel(source)}
-      </span>
-      {!readOnly && dbSnapshot && source === "manual" && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={reloadFromDb}
-          className="ms-auto gap-1.5 h-7 text-xs"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          טען מחדש מהמערכת
-        </Button>
-      )}
+      <div className="min-w-0 flex-1">
+        <p className={`text-xs font-semibold ${a.eyebrow}`}>נתוני מזג אוויר</p>
+        <h4 className="text-sm font-bold text-slate-900">מזג אוויר — {dayLabel}</h4>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${sourceClass(source)}`}>
+          {sourceLabel(source)}
+        </span>
+        {!readOnly && dbSnapshot && source === "manual" && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={reloadFromDb}
+            className="h-8 gap-1.5 border-orange-200 bg-white text-xs text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            טען מחדש מהמערכת
+          </Button>
+        )}
+      </div>
     </div>
   );
 
@@ -147,13 +162,13 @@ export function WeatherCard({
       val: string | number,
       suffix?: string,
     ) => (
-      <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3 flex items-start gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 text-slate-500 shrink-0">
+      <div className="flex min-h-[5.5rem] items-start gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-orange-500 ring-1 ring-slate-200">
           <Icon className="h-4 w-4" />
         </span>
-        <div>
-          <div className="text-xs text-slate-500">{label}</div>
-          <div className={`text-base font-bold ${a.statValue}`}>
+        <div className="min-w-0">
+          <div className="text-xs font-medium leading-5 text-slate-500">{label}</div>
+          <div className={`mt-0.5 text-lg font-bold tabular-nums ${a.statValue}`}>
             {val}
             {suffix && <span className="text-xs font-normal text-slate-500"> {suffix}</span>}
           </div>
@@ -161,38 +176,46 @@ export function WeatherCard({
       </div>
     );
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
+      <section className={`overflow-hidden rounded-xl border ${a.border} bg-white shadow-sm`} dir="rtl">
         {Header}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
           {stat(Thermometer, "טמפרטורה",          value.temperatureC, "°C")}
           {stat(Wind,        "טמפרטורה מורגשת",   value.feelsLikeC,   "°C")}
           {stat(Droplets,    "לחות",              value.humidityPct,  "%")}
         </div>
-      </div>
+        {value.description && (
+          <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm leading-6 text-slate-700">
+              {value.description}
+            </div>
+          </div>
+        )}
+      </section>
     );
   }
 
   const showNotFoundHint = !isLoading && !hasError && !dbSnapshot && source === "db";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" dir="rtl">
+    <section className={`overflow-hidden rounded-xl border ${a.border} bg-white shadow-sm`} dir="rtl">
       {Header}
 
       <div className="p-5 space-y-4">
         {showNotFoundHint && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
             לא נמצא מידע לתאריך זה — ניתן להזין ידנית.
           </p>
         )}
         {hasError && (
-          <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
             שגיאה בטעינת תחזית מזג האוויר — ניתן להזין ידנית.
           </p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FieldText
             label="טמפרטורה (°C)"
+            labelClassName={FIELD_LABEL_CLASS}
             startIcon={<Thermometer className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="decimal"
@@ -206,6 +229,7 @@ export function WeatherCard({
           />
           <FieldText
             label="טמפרטורה מורגשת (°C)"
+            labelClassName={FIELD_LABEL_CLASS}
             startIcon={<Wind className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="decimal"
@@ -219,6 +243,7 @@ export function WeatherCard({
           />
           <FieldText
             label="לחות (%)"
+            labelClassName={FIELD_LABEL_CLASS}
             startIcon={<Droplets className="h-4 w-4 text-slate-400" />}
             type="number"
             inputMode="numeric"
@@ -231,7 +256,17 @@ export function WeatherCard({
             error={errors?.humidityPct}
           />
         </div>
+
+        <FieldText
+          label="תיאור מזג האוויר"
+          startIcon={<CloudSun className="h-4 w-4 text-slate-400" />}
+          type="text"
+          maxLength={200}
+          value={value.description ?? ""}
+          onChange={(e) => set("description", e.target.value)}
+          error={errors?.description}
+        />
       </div>
-    </div>
+    </section>
   );
 }

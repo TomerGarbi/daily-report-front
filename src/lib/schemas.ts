@@ -127,6 +127,7 @@ export const weatherDaySchema = z.object({
   temperatureC: z.number({ error: "טמפרטורה היא שדה חובה" }).min(-50).max(60),
   feelsLikeC:   z.number({ error: "טמפרטורה מורגשת היא שדה חובה" }).min(-50).max(60),
   humidityPct:  z.number({ error: "לחות היא שדה חובה" }).min(0).max(100),
+  description:  z.string().trim().max(200, "תיאור מזג האוויר יכול להכיל עד 200 תווים").default(""),
 });
 
 const weatherSourceSchema = z.enum(["db", "manual"]);

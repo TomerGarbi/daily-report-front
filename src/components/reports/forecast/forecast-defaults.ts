@@ -18,6 +18,7 @@ const emptyWeatherDay = (): WeatherDay => ({
   temperatureC: 0,
   feelsLikeC:   0,
   humidityPct:  0,
+  description:  "",
 });
 
 export const emptyForecast = (region: string = "gush-dan"): ForecastBlock => ({

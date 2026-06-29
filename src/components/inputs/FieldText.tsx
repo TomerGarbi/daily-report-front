@@ -8,12 +8,14 @@ export interface FieldTextProps
   hint?: string;
   /** Lucide icon rendered inside the start (right) of the input */
   startIcon?: React.ReactNode;
+  /** Custom class for the label element */
+  labelClassName?: string;
   /** Custom background class for the input (default: "bg-white") */
   bgColor?: string;
 }
 
 const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
-  ({ label, error, hint, startIcon, bgColor = "bg-white", className, id, required, dir, ...props }, ref) => {
+  ({ label, error, hint, startIcon, labelClassName, bgColor = "bg-white", className, id, required, dir, ...props }, ref) => {
     const generatedId = React.useId();
     const inputId = id ?? generatedId;
     const errorId = `${inputId}-error`;
@@ -25,7 +27,7 @@ const FieldText = React.forwardRef<HTMLInputElement, FieldTextProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-medium text-slate-700"
+            className={cn("text-sm font-medium text-slate-700", labelClassName)}
           >
             {label}
             {required && <span className="ms-0.5 text-orange-500">*</span>}

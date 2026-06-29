@@ -169,10 +169,8 @@ export interface ArchiveSectionProps {
   /** Additional historical days, ordered most-recent first (yesterday-1, yesterday-2, ...). */
   extraDays?:         ArchiveBlock[];
   onExtraDaysChange?: (next: ArchiveBlock[]) => void;
-  /** Editable last-year block. When `onLastYearChange` is provided the panel
-   *  renders as an editable form; otherwise it falls back to read-only display. */
+  /** Read-only last-year block, used as a fallback when fresh API data is unavailable. */
   lastYearValue?:    LastYearArchiveBlock;
-  onLastYearChange?: (next: LastYearArchiveBlock) => void;
   readOnly?: boolean;
   /** When false the SWR hook is disabled (e.g. before the user opens the step). */
   enabled?:  boolean;
@@ -186,7 +184,6 @@ export function ArchiveSection({
   extraDays,
   onExtraDaysChange,
   lastYearValue,
-  onLastYearChange,
   readOnly,
   enabled = true,
 }: ArchiveSectionProps) {
@@ -238,7 +235,7 @@ export function ArchiveSection({
           <div className="h-72 rounded-2xl bg-slate-100 animate-pulse" />
           <div className="h-40 rounded-2xl bg-slate-100 animate-pulse" />
         </div>
-        <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} onChange={onLastYearChange} readOnly={readOnly} />
+        <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} />
       </div>
     );
   }
@@ -335,7 +332,7 @@ export function ArchiveSection({
           <ReadOnlyExtraDayCard key={d.date || i} block={d} />
         ))}
         </div>
-        <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} onChange={onLastYearChange} readOnly={readOnly} />
+        <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} />
       </div>
     );
   }
@@ -516,7 +513,7 @@ export function ArchiveSection({
         </div>
       )}
       </div>
-      <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} onChange={onLastYearChange} readOnly={readOnly} />
+      <LastYearPanel data={lastYear} isLoading={lastYearLoading} value={lastYearValue} />
     </div>
   );
 }
@@ -558,8 +555,6 @@ interface LastYearPanelProps {
   data: LastYearArchiveData | null;
   isLoading: boolean;
   value?:    LastYearArchiveBlock;
-  onChange?: (next: LastYearArchiveBlock) => void;
-  readOnly?: boolean;
 }
 
 function lastYearBlockFromApiData(d: LastYearArchiveData): LastYearArchiveBlock {
@@ -580,27 +575,11 @@ function lastYearBlockFromApiData(d: LastYearArchiveData): LastYearArchiveBlock 
   };
 }
 
-function LastYearPanel({ data, isLoading, value, onChange, readOnly }: LastYearPanelProps) {
+function LastYearPanel({ data, isLoading, value }: LastYearPanelProps) {
   const fmtNum = (v: number) =>
     new Intl.NumberFormat("he-IL", { maximumFractionDigits: 1 }).format(v);
 
-  // Auto-prefill once when API data arrives and no value yet.
-  const prefillApplied = useRef(false);
-  useEffect(() => {
-    if (!data || !onChange || prefillApplied.current) return;
-    if (value?.peakConsumptionHour) return;
-    prefillApplied.current = true;
-    onChange(lastYearBlockFromApiData(data));
-  }, [data, onChange, value?.peakConsumptionHour]);
-
-  const applyServerData = () => {
-    if (!data || !onChange) return;
-    prefillApplied.current = true;
-    onChange(lastYearBlockFromApiData(data));
-  };
-
-  // While waiting for first prefill in editable mode, show skeleton.
-  if (isLoading && !value && !readOnly) {
+  if (isLoading && !value) {
     return (
       <div className="space-y-6">
         <div className="h-28 rounded-2xl bg-slate-100 animate-pulse" />
@@ -609,8 +588,7 @@ function LastYearPanel({ data, isLoading, value, onChange, readOnly }: LastYearP
     );
   }
 
-  const block: LastYearArchiveBlock = value ?? emptyLastYearArchiveBlock();
-  const set = (next: LastYearArchiveBlock) => onChange?.(next);
+  const block: LastYearArchiveBlock = data ? lastYearBlockFromApiData(data) : value ?? emptyLastYearArchiveBlock();
 
   const yearLabel = (() => {
     if (!block.date) return "";
@@ -621,17 +599,15 @@ function LastYearPanel({ data, isLoading, value, onChange, readOnly }: LastYearP
     }
   })();
 
-  // ── Read-only variant ────────────────────────────────────────────────
-  if (readOnly) {
-    const growth = block.ytdEnergyGrowthPct;
-    const GrowthIcon = growth > 0 ? TrendingUp : growth < 0 ? TrendingDown : Minus;
-    const growthClass =
-      growth > 0 ? "text-emerald-700 bg-emerald-50 ring-emerald-200" :
-      growth < 0 ? "text-rose-700 bg-rose-50 ring-rose-200" :
-                   "text-slate-500 bg-slate-100 ring-slate-200";
+  const growth = block.ytdEnergyGrowthPct;
+  const GrowthIcon = growth > 0 ? TrendingUp : growth < 0 ? TrendingDown : Minus;
+  const growthClass =
+    growth > 0 ? "text-emerald-700 bg-emerald-50 ring-emerald-200" :
+    growth < 0 ? "text-rose-700 bg-rose-50 ring-rose-200" :
+                 "text-slate-500 bg-slate-100 ring-slate-200";
 
-    return (
-      <div className="space-y-6">
+  return (
+    <div className="space-y-6">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-indigo-50 via-violet-50 to-fuchsia-50 ring-1 ring-indigo-200 shadow-sm p-6">
           <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-l from-indigo-400 via-violet-400 to-fuchsia-400" />
           <div className="flex items-center gap-4">
@@ -699,187 +675,11 @@ function LastYearPanel({ data, isLoading, value, onChange, readOnly }: LastYearP
             <ReadOnlyWeatherStat icon={Droplets}    label="לחות"        value={block.weather.humidityPct}  unit="%"  accent="text-sky-700"    bg="bg-sky-50/70"    ring="ring-sky-100" />
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // ── Editable variant ─────────────────────────────────────────────────
-  const serverDataAvailable = Boolean(data?.hasData);
-  const showEmptyNotice = !serverDataAvailable && !value?.peakConsumptionHour;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-indigo-50 via-violet-50 to-fuchsia-50 ring-1 ring-indigo-200 shadow-sm p-6">
-        <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-l from-indigo-400 via-violet-400 to-fuchsia-400" />
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-sm">
-            <History className="h-6 w-6" />
-          </div>
-          <div className="flex-1 min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600">
-              <h3 className="text-base font-semibold text-slate-800">
-                אשתקד {yearLabel && <span className="text-slate-500 font-normal">({yearLabel})</span>}
-              </h3>
-              {block.date && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  {fmtDate(block.date)}
-                </span>
-              )}
-              {block.dayName && (
-                <span className="font-medium text-slate-700">{block.dayName}</span>
-              )}
-            </div>
-            <div className="flex items-end gap-3">
-              <div className="w-40">
-                <FieldText
-                  label="שעת שיא"
-                  placeholder="14:30"
-                  value={block.peakConsumptionHour}
-                  onChange={(e) => set({ ...block, peakConsumptionHour: e.target.value })}
-                  startIcon={<Clock className="h-4 w-4" />}
-                  dir="ltr"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={applyServerData}
-                disabled={!data}
-                className="gap-1.5 h-9 text-xs whitespace-nowrap"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                טען נתונים מהמערכת
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* No-data notice */}
-      {showEmptyNotice && (
-        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 text-amber-900">
-          <AlertCircle className="h-5 w-5 mt-0.5 flex-none text-amber-600" />
-          <div className="text-sm">
-            <p className="font-semibold">אין נתונים לאותו יום אשתקד</p>
-            <p className="mt-0.5 text-amber-800/80">לא ניתן היה לטעון נתונים מהמערכת. ניתן להזין ידנית.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Energy + peak (editable) */}
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-slate-50">
-          <Zap className="h-5 w-5 text-slate-500" />
-          <h4 className="text-sm font-semibold text-slate-700">צריכה וייצור אשתקד</h4>
-        </div>
-        <ul className="divide-y divide-slate-100">
-          <EditableStatRow icon={Gauge}     label="שיא צריכה"               value={block.peakConsumptionMw} unit="MW"
-            onChange={(v) => set({ ...block, peakConsumptionMw: v })} />
-          <EditableStatRow icon={Building2} label="סה״כ ייצור חברת חשמל"     value={block.totalIecMwh}       unit="MWh"
-            onChange={(v) => set({ ...block, totalIecMwh: v })} />
-          <EditableStatRow icon={Factory}   label="סה״כ ייצור יחידות פרטיות"   value={block.totalPrivateMwh}   unit="MWh"
-            onChange={(v) => set({ ...block, totalPrivateMwh: v })} />
-          <EditableStatRow icon={Sigma}     label="סה״כ אנרגיה"               value={block.totalMwh}          unit="MWh"
-            onChange={(v) => set({ ...block, totalMwh: v })} />
-          <EditableStatRow icon={TrendingUp} label="גידול בצריכה מתחילת השנה" value={block.ytdEnergyGrowthPct} unit="%"
-            allowNegative
-            onChange={(v) => set({ ...block, ytdEnergyGrowthPct: v })} />
-        </ul>
-      </div>
-
-      {/* Weather (editable) */}
-      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-gradient-to-l from-sky-50 via-blue-50 to-cyan-50">
-          <CloudSun className="h-5 w-5 text-sky-600" />
-          <h4 className="text-sm font-semibold text-slate-700">מזג אוויר בשעת השיא</h4>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5">
-          <FieldText
-            label="טמפרטורה (°C)"
-            type="number"
-            step="0.1"
-            placeholder="0"
-            value={numStr(block.weather.temperatureC)}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              set({ ...block, weather: { ...block.weather, temperatureC: Number.isFinite(v) ? v : 0 } });
-            }}
-            startIcon={<Thermometer className="h-4 w-4" />}
-            dir="ltr"
-          />
-          <FieldText
-            label="טמפ׳ מורגשת (°C)"
-            type="number"
-            step="0.1"
-            placeholder="0"
-            value={numStr(block.weather.feelsLikeC)}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              set({ ...block, weather: { ...block.weather, feelsLikeC: Number.isFinite(v) ? v : 0 } });
-            }}
-            startIcon={<Thermometer className="h-4 w-4" />}
-            dir="ltr"
-          />
-          <FieldText
-            label="לחות (%)"
-            type="number"
-            min={0}
-            max={100}
-            placeholder="0"
-            value={numStr(block.weather.humidityPct)}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              set({ ...block, weather: { ...block.weather, humidityPct: Number.isFinite(v) ? v : 0 } });
-            }}
-            startIcon={<Droplets className="h-4 w-4" />}
-            dir="ltr"
-          />
-        </div>
-      </div>
     </div>
   );
 }
 
-// ─── Editable / read-only stat rows ─────────────────────────────────────────
-
-interface EditableStatRowProps {
-  icon: React.ElementType;
-  label: string;
-  value: number;
-  unit: string;
-  allowNegative?: boolean;
-  onChange: (v: number) => void;
-}
-
-function EditableStatRow({ icon: Icon, label, value, unit, allowNegative, onChange }: EditableStatRowProps) {
-  return (
-    <li className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50/60">
-      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="flex-1 text-sm font-medium text-slate-700">{label}</span>
-      <div className="w-32">
-        <FieldText
-          type="number"
-          min={allowNegative ? undefined : 0}
-          step="any"
-          placeholder="0"
-          value={numStr(value)}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            onChange(Number.isFinite(v) ? v : 0);
-          }}
-          dir="ltr"
-          className="text-left"
-        />
-      </div>
-      <span className="w-8 text-xs text-slate-500 text-right">{unit}</span>
-    </li>
-  );
-}
+// ─── Read-only stat row ────────────────────────────────────────────────────
 
 interface ReadOnlyStatRowProps {
   icon: React.ElementType;

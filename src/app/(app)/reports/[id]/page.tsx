@@ -1,14 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FileText, ArrowRight, Calendar, User, Tag, Pencil } from "lucide-react";
 import { useReport } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { FuelGroupedTables } from "@/components/reports/FuelGroupedTables";
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
+import { FuelsSection } from "@/components/reports/FuelsSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { fetchFuelSites } from "@/lib/fuel-sites-api";
+import type { FuelSite } from "@/types/fuelSite";
 import { normalizeReportContent } from "@/types/report";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -43,7 +48,17 @@ export default function ReportViewPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const authFetch = useAuthFetch();
   const { report, isLoading, error } = useReport(id);
+  const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFuelSites(authFetch)
+      .then((s) => { if (!cancelled) setFuelSites(s); })
+      .catch((err) => console.error("[ReportView] fetchFuelSites failed:", err));
+    return () => { cancelled = true; };
+  }, [authFetch]);
 
   if (isLoading) {
     return (
@@ -176,6 +191,10 @@ export default function ReportViewPage() {
           lastYearValue={content.lastYearArchive}
           readOnly
         />
+
+        {content.fuels && content.fuels.length > 0 && (
+          <FuelsSection value={content.fuels} sites={fuelSites} readOnly />
+        )}
 
         {!hasPrivate && !hasIec && !content.forecast && (
           <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 text-center text-slate-500">

@@ -9,6 +9,7 @@ import { AlertTriangle, Plus, Pencil, X, BookOpen, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StationRow, StationData, StationStatus } from "@/types/report";
 import { CatalogPickerDialog } from "@/components/StationTable/CatalogPickerDialog";
+import { StatusSummaryCards } from "@/components/StationTable/StatusSummaryCards";
 import { usePreferences } from "@/components/PreferencesProvider";
 
 export type { StationRow, StationData };
@@ -317,13 +318,13 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
   }, [data]);
 
   return (
-    <div className="space-y-3">
+    <div className="mx-32">
     <div className="rounded-2xl bg-white border border-slate-200 shadow-xl ring-1 ring-slate-900/5 overflow-hidden">
       {title && (
         <div className="px-5 py-4 bg-orange-500 flex items-center justify-between" dir="rtl">
           <div className="flex items-center gap-2.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" />
-            <h3 className="text-base font-bold text-white">{title}</h3>
+            <h3 className="text-base text-xl font-bold text-white">{title}</h3>
           </div>
           {canEdit && (
             <Button
@@ -341,7 +342,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       <div className="overflow-x-auto">
         <table className="w-full text-base" dir="rtl">
           <thead>
-            <tr className="bg-white border-b-2 border-slate-400">
+            <tr className="bg-white border-b-2 border-slate-300">
               {COL_HEADERS.map((h) => (
                 <th
                   key={h.label}
@@ -363,7 +364,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                 <tr
                   key={`${group}-${row.stationNumber}`}
                   className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors  ${
-                    rowIdx === rows.length - 1 && !editing ? "border-b-2 border-b-slate-400" : ""
+                    rowIdx === rows.length - 1 && !editing ? "border-b-2 border-b-slate-300" : ""
                   }`}
                 >
                   {/* שם יחידה — merged, read-only */}
@@ -604,72 +605,26 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       </div>
 
       {/* ── Status breakdown panel ── */}
-      {(() => {
-        const STATUS_ORDER = ["Active", "Maintenance", "Inactive"] as const;
-        const empty = { count: 0, installed: 0, available: 0, peak: 0, minReserve: 0, secondaryFuel: 0 };
-        const totalCount = Object.values(totals.byStatus).reduce((n, s) => n + s.count, 0);
-        return (
-          <div className="border-t border-slate-200 bg-white px-5 py-5" dir="rtl">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">פירוט לפי סטטוס</p>
-            <div className="flex flex-wrap gap-6">
-              {/* ── Total card ── */}
-              <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm px-5 py-4 flex flex-col gap-3 min-w-[240px]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-block px-3 py-0.5 rounded-full text-sm font-semibold border bg-orange-500 text-white border-orange-500">סה״כ</span>
-                  <span className="text-sm text-slate-500 font-semibold">{totalCount} יחידות</span>
-                </div>
-                <div className="h-px bg-orange-100" />
-                <div className="grid grid-cols-4 gap-x-3 text-center">
-                  <div className="text-xs text-slate-400 font-medium">מותקנת</div>
-                  <div className="text-xs text-slate-400 font-medium">זמינה</div>
-                  <div className="text-xs text-slate-400 font-medium">מינ׳ רזרבה</div>
-                  <div className="text-xs text-slate-400 font-medium">התדרדרות</div>
-                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.installed}</div>
-                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.available}</div>
-                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.minReserve}</div>
-                  <div className="text-lg text-orange-900 font-bold mt-1">{totals.degradation}</div>
-                </div>
-              </div>
-              {/* ── Per-status cards ── */}
-              {STATUS_ORDER.map((status) => {
-                const s = totals.byStatus[status] ?? empty;
-                const valueColor =
-                  status === "Active"
-                    ? "text-emerald-600"
-                    : status === "Maintenance"
-                    ? "text-amber-500"
-                    : "text-red-500";
-                return (
-                  <div
-                    key={`card-${status}`}
-                    className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex flex-col gap-3 min-w-[240px]"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className={`inline-block px-3 py-0.5 rounded-full text-sm font-semibold border ${colorFor(status)}`}
-                      >
-                        {labelFor(status)}
-                      </span>
-                      <span className="text-sm text-slate-500 font-semibold">{s.count} יחידות</span>
-                    </div>
-                    <div className="h-px bg-slate-100" />
-                    <div className="grid grid-cols-4 gap-x-3 text-center">
-                      <div className="text-xs text-slate-400 font-medium">מותקנת</div>
-                      <div className="text-xs text-slate-400 font-medium">זמינה</div>
-                      <div className="text-xs text-slate-400 font-medium">מינ׳ רזרבה</div>
-                      <div className="text-xs text-slate-400 font-medium">התדרדרות</div>
-                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.installed}</div>
-                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.available}</div>
-                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.minReserve}</div>
-                      <div className={`text-lg ${valueColor} font-bold mt-1`}>{s.installed - s.available}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
+      <StatusSummaryCards
+        totals={totals}
+        statusOrder={["Active", "Maintenance", "Inactive"]}
+        labelFor={labelFor}
+        colorFor={colorFor}
+        valueColorFor={(status) =>
+          status === "Active"
+            ? "text-emerald-600"
+            : status === "Maintenance"
+              ? "text-amber-500"
+              : "text-red-500"
+        }
+        borderColorFor={(status) =>
+          status === "Active"
+            ? "border-emerald-500"
+            : status === "Maintenance"
+              ? "border-amber-500"
+              : "border-red-500"
+        }
+      />
 
       {/* ── Add station group ── */}
       {editing && (

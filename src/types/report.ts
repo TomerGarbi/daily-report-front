@@ -72,6 +72,7 @@ export interface WeatherDay {
   temperatureC: number;
   feelsLikeC:   number;
   humidityPct:  number;
+  description:  string;
 }
 
 /** Whether a day's weather values came from the DB or were entered manually. */
@@ -106,6 +107,8 @@ export interface ReportContent {
   /** Editable same-day-last-year archive block. Prefilled from the
    *  external server but fully overridable by the user. */
   lastYearArchive?: LastYearArchiveBlock;
+  /** Per-tank fuel inventory rows (site, fuel type, tank type, available, bottom). */
+  fuels?: FuelsBlock;
 }
 
 export const emptyReportContent = (): ReportContent => ({
@@ -133,7 +136,10 @@ export function normalizeReportContent(raw: unknown): ReportContent {
   if (Array.isArray(obj.archiveExtraDays)) {
     out.archiveExtraDays = obj.archiveExtraDays.map(normalizeArchiveBlock);
   }
-  if (obj.forecast)            out.forecast = obj.forecast as ForecastBlock;
+  if (obj.forecast)            out.forecast = normalizeForecastBlock(obj.forecast);
+  if (Array.isArray(obj.fuels)) {
+    out.fuels = obj.fuels.map(normalizeFuelRow);
+  }
 
   // ── Legacy shape ─────────────────────────────────────────────────────────
   // Migrate if any of the old keys are present and the new ones were empty.
@@ -171,6 +177,52 @@ export function normalizeReportContent(raw: unknown): ReportContent {
   }
 
   return out;
+}
+
+function normalizeWeatherDay(raw: unknown): WeatherDay {
+  const obj = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  return {
+    temperatureC: typeof obj.temperatureC === "number" ? obj.temperatureC : 0,
+    feelsLikeC:   typeof obj.feelsLikeC   === "number" ? obj.feelsLikeC   : 0,
+    humidityPct:  typeof obj.humidityPct  === "number" ? obj.humidityPct  : 0,
+    description:  typeof obj.description  === "string" ? obj.description  : "",
+  };
+}
+
+function normalizeLoadForecastDay(raw: unknown): LoadForecastDay {
+  const obj = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  return {
+    value:           typeof obj.value           === "number" ? obj.value           : 0,
+    peakHour:        typeof obj.peakHour        === "string" ? obj.peakHour        : "",
+    minReserveValue: typeof obj.minReserveValue === "number" ? obj.minReserveValue : 0,
+    minReserveHour:  typeof obj.minReserveHour  === "string" ? obj.minReserveHour  : "",
+  };
+}
+
+function normalizeForecastBlock(raw: unknown): ForecastBlock {
+  const obj = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const load = obj.load && typeof obj.load === "object" ? obj.load as Record<string, unknown> : {};
+  const weather = obj.weather && typeof obj.weather === "object" ? obj.weather as Record<string, unknown> : {};
+  const source = weather.source && typeof weather.source === "object" ? weather.source as Record<string, unknown> : {};
+  const sourceToday = source.today === "db" || source.today === "manual" ? source.today : "manual";
+  const sourceTomorrow = source.tomorrow === "db" || source.tomorrow === "manual" ? source.tomorrow : "manual";
+
+  return {
+    load: {
+      today:    normalizeLoadForecastDay(load.today),
+      tomorrow: normalizeLoadForecastDay(load.tomorrow),
+    },
+    weather: {
+      region:    typeof weather.region === "string" && weather.region.trim() ? weather.region : "gush-dan",
+      fetchedAt: typeof weather.fetchedAt === "string" ? weather.fetchedAt : undefined,
+      today:     normalizeWeatherDay(weather.today),
+      tomorrow:  normalizeWeatherDay(weather.tomorrow),
+      source: {
+        today:    sourceToday,
+        tomorrow: sourceTomorrow,
+      },
+    },
+  };
 }
 
 // ─── Report ─────────────────────────────────────────────────────────────────
@@ -375,5 +427,57 @@ export function normalizeLastYearArchiveBlock(raw: unknown): LastYearArchiveBloc
       humidityPct:  typeof w.humidityPct  === "number" ? w.humidityPct  : 0,
     },
     ytdEnergyGrowthPct:  typeof o.ytdEnergyGrowthPct === "number" ? o.ytdEnergyGrowthPct : 0,
+  };
+}
+
+// ─── Fuels (per-tank inventory) ─────────────────────────────────────────────
+
+export interface FuelRow {
+  /** Stable client-side id; not persisted as a constraint, just for React keys. */
+  id: string;
+  /** Fuel-site catalog tag (stable). Empty string when not yet picked. */
+  stationTag: string;
+  /** Display name, denormalized from the catalog at row-creation time. */
+  stationName: string;
+  /** Defaults to the picked tank's fuel type. */
+  fuelType: StationFuel | "";
+  /** Free-text tank label (typically copied from the FuelSite tank name). */
+  tankType: string;
+  /** Available amount in the tank (excluding the un-pumpable bottom reserve). */
+  available: number;
+  /** "Bottom" / dead-stock reserve that cannot be pumped out. */
+  bottom: number;
+}
+
+export type FuelsBlock = FuelRow[];
+
+export function emptyFuelRow(): FuelRow {
+  return {
+    id:          (typeof crypto !== "undefined" && crypto.randomUUID)
+                   ? crypto.randomUUID()
+                   : `fuel-${Math.random().toString(36).slice(2, 10)}`,
+    stationTag:  "",
+    stationName: "",
+    fuelType:    "",
+    tankType:    "",
+    available:   0,
+    bottom:      0,
+  };
+}
+
+export function normalizeFuelRow(raw: unknown): FuelRow {
+  const e = emptyFuelRow();
+  if (!raw || typeof raw !== "object") return e;
+  const o = raw as Record<string, unknown>;
+  const isFuel = (v: unknown): v is StationFuel =>
+    typeof v === "string" && (STATION_FUELS as string[]).includes(v);
+  return {
+    id:          typeof o.id === "string" && o.id ? o.id : e.id,
+    stationTag:  typeof o.stationTag === "string" ? o.stationTag : "",
+    stationName: typeof o.stationName === "string" ? o.stationName : "",
+    fuelType:    isFuel(o.fuelType) ? o.fuelType : "",
+    tankType:    typeof o.tankType === "string" ? o.tankType : "",
+    available:   typeof o.available === "number" && Number.isFinite(o.available) ? o.available : 0,
+    bottom:      typeof o.bottom    === "number" && Number.isFinite(o.bottom)    ? o.bottom    : 0,
   };
 }

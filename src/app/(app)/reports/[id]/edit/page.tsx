@@ -10,10 +10,10 @@ import {
   ArrowRight,
   Zap,
   Save,
-  ClipboardList,
   FileDown,
   TrendingUp,
   Archive,
+  Fuel,
 } from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
@@ -23,19 +23,23 @@ import {
 } from "@/components/reports/FuelGroupedTables";
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
-import type { ArchiveBlock, ForecastBlock, LastYearArchiveBlock, ReportContent } from "@/types/report";
+import { FuelsSection } from "@/components/reports/FuelsSection";
+import type { ArchiveBlock, ForecastBlock, FuelsBlock, ReportContent } from "@/types/report";
 import { emptyReportContent, normalizeReportContent } from "@/types/report";
 import { emptyForecast } from "@/components/reports/forecast/forecast-defaults";
 import { forecastSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { useReport, useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthFetch } from "@/hooks/useAuthFetch";
+import { fetchFuelSites } from "@/lib/fuel-sites-api";
+import type { FuelSite } from "@/types/fuelSite";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
 
 // ─── Section definitions ────────────────────────────────────────────────────
 
-const SECTION_IDS = ["private", "iec", "forecast", "archive", "additional", "review"] as const;
+const SECTION_IDS = ["private", "iec", "forecast", "archive", "fuels", "review"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -44,6 +48,7 @@ export default function EditReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const authFetch = useAuthFetch();
   const { report, isLoading: reportLoading, error: reportError } = useReport(id);
   const { updateReport } = useReportMutations();
 
@@ -53,6 +58,7 @@ export default function EditReportPage() {
   const [content, setContent] = useState<ReportContent>(emptyReportContent());
   const [isSaving, setIsSaving] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
 
   // ── Per-section setters ───────────────────────────────────────────────
   const setPrivateBuckets = useCallback(
@@ -75,8 +81,8 @@ export default function EditReportPage() {
     (next: ArchiveBlock[]) => setContent((c) => ({ ...c, archiveExtraDays: next })),
     [],
   );
-  const setLastYearArchive = useCallback(
-    (next: LastYearArchiveBlock) => setContent((c) => ({ ...c, lastYearArchive: next })),
+  const setFuels = useCallback(
+    (next: FuelsBlock) => setContent((c) => ({ ...c, fuels: next })),
     [],
   );
 
@@ -108,7 +114,14 @@ export default function EditReportPage() {
       setInitialized(true);
     }
   }, [report, initialized]);
-
+  // ── Load fuel-site catalog once ────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    fetchFuelSites(authFetch)
+      .then((s) => { if (!cancelled) setFuelSites(s); })
+      .catch((err) => console.error("[EditReport] fetchFuelSites failed:", err));
+    return () => { cancelled = true; };
+  }, [authFetch]);
   // ── Warn on refresh / tab close ───────────────────────────────────────
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -208,12 +221,12 @@ export default function EditReportPage() {
     { id: "iec",        label: "חברת חשמל",      icon: Zap },
     { id: "forecast",   label: "תחזית",          icon: TrendingUp },
     { id: "archive",    label: "ארכיון",          icon: Archive },
-    { id: "additional", label: "נתונים נוספים",  icon: ClipboardList },
+    { id: "fuels",      label: "דלקים",          icon: Fuel },
     { id: "review",     label: "סיכום ואישור",   icon: CheckCircle2 },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+      <div className="min-h-screen bg-gray-50 text-[17px]" dir="rtl">
       <StepperHeader
         icon={FileText}
         title={title}
@@ -227,7 +240,7 @@ export default function EditReportPage() {
         onBack={() => router.push("/reports")}
       />
 
-      <div className="w-full px-6 py-8">
+      <div className={`mx-auto ${activeSection === "private" || activeSection === "iec" ? "" : activeSection === "forecast" ? "max-w-7xl" : "max-w-5xl"} px-6 py-8`}>
         {activeSection === "private" && (
           <div className="space-y-8">
             <FuelGroupedTables
@@ -351,7 +364,6 @@ export default function EditReportPage() {
               extraDays={content.archiveExtraDays}
               onExtraDaysChange={setArchiveExtraDays}
               lastYearValue={content.lastYearArchive}
-              onLastYearChange={setLastYearArchive}
               enabled
             />
 
@@ -378,10 +390,10 @@ export default function EditReportPage() {
                 </Button>
                 <Button
                   size="lg"
-                  onClick={() => setActiveSection("additional")}
+                  onClick={() => setActiveSection("fuels")}
                   className="gap-2 text-base px-8"
                 >
-                  <span>נתונים נוספים</span>
+                  <span>דלקים</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
               </div>
@@ -389,11 +401,13 @@ export default function EditReportPage() {
           </div>
         )}
 
-        {activeSection === "additional" && (
+        {activeSection === "fuels" && (
           <div className="space-y-8">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8 text-center text-slate-500">
-              נתונים נוספים — בקרוב
-            </div>
+            <FuelsSection
+              value={content.fuels ?? []}
+              onChange={setFuels}
+              sites={fuelSites}
+            />
 
             <div className="flex justify-between">
               <Button
@@ -463,17 +477,20 @@ export default function EditReportPage() {
                 readOnly
               />
             )}
+            {content.fuels && content.fuels.length > 0 && (
+              <FuelsSection value={content.fuels} sites={fuelSites} readOnly />
+            )}
 
             <div className="flex justify-between">
               <Button
                 size="lg"
                 variant="outline"
-                onClick={() => setActiveSection("additional")}
+                onClick={() => setActiveSection("fuels")}
                 className="gap-2 text-base px-8"
                 disabled={isSaving}
               >
                 <ArrowRight className="h-5 w-5" />
-                <span>חזרה לנתונים נוספים</span>
+                <span>חזרה לדלקים</span>
               </Button>
               <div className="flex gap-3">
                 <Button

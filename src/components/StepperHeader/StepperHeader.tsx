@@ -23,7 +23,7 @@ export function StepperHeader({
 }: StepperHeaderProps) {
   return (
     <div className="bg-white border-b border-slate-200 px-6 pt-5 pb-3 shadow-sm">
-      <div className="w-full">
+      <div className="mx-auto max-w-5xl">
         {/* ── Top row: icon badge + editable fields + back button ── */}
         <div className="flex items-start gap-3">
           {/* Icon badge */}
