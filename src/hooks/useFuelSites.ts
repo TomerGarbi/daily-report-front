@@ -26,7 +26,6 @@ import {
   type FuelSitesQueryParams,
 } from "@/lib/fuel-sites-api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 // ─── useFuelSites ─────────────────────────────────────────────────────────────
 
@@ -93,7 +92,6 @@ export interface UseFuelSiteMutationsReturn {
 }
 
 export function useFuelSiteMutations(): UseFuelSiteMutationsReturn {
-  const authFetch = useAuthFetch();
   const { mutate: globalMutate } = useSWRConfig();
 
   const invalidate = useCallback(() => {
@@ -106,38 +104,38 @@ export function useFuelSiteMutations(): UseFuelSiteMutationsReturn {
 
   return {
     createFuelSite: useCallback(async (payload) => {
-      const s = await apiCreate(authFetch, payload);
+      const s = await apiCreate(payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     updateFuelSite: useCallback(async (id, payload) => {
-      const s = await apiUpdate(authFetch, id, payload);
+      const s = await apiUpdate(id, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     deleteFuelSite: useCallback(async (id) => {
-      await apiDelete(authFetch, id);
+      await apiDelete(id);
       invalidate();
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     addTank: useCallback(async (siteId, payload) => {
-      const s = await apiAddTank(authFetch, siteId, payload);
+      const s = await apiAddTank(siteId, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     updateTank: useCallback(async (siteId, tankId, payload) => {
-      const s = await apiUpdateTank(authFetch, siteId, tankId, payload);
+      const s = await apiUpdateTank(siteId, tankId, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     removeTank: useCallback(async (siteId, tankId) => {
-      const s = await apiRemoveTank(authFetch, siteId, tankId);
+      const s = await apiRemoveTank(siteId, tankId);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
   };
 }

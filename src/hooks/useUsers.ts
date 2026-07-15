@@ -4,7 +4,6 @@ import type { UserEntry, UserListResponse, UserStats, UserRole } from "@/types/u
 import { buildUsersUrl, USERS_STATS_URL, type UsersQueryParams } from "@/lib/users-api";
 import { updateUser, deleteUser } from "@/lib/users-api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 // ─── useUsers ─────────────────────────────────────────────────────────────────
 
@@ -23,6 +22,9 @@ export function useUsers(params: UsersQueryParams = {}): UseUsersReturn {
     params.role,
     params.group,
     params.search,
+    params.status,
+    params.sort,
+    params.order,
     params.page,
     params.limit,
   ]);
@@ -61,7 +63,6 @@ export function useUserStats(): UseUserStatsReturn {
 // ─── useUserMutations ─────────────────────────────────────────────────────────
 
 export function useUserMutations() {
-  const authFetch = useAuthFetch();
   const { mutate } = useSWRConfig();
 
   const revalidate = useCallback(() => {
@@ -70,20 +71,20 @@ export function useUserMutations() {
   }, [mutate]);
 
   const patchUser = useCallback(
-    async (userId: string, updates: { role?: UserRole; groups?: string[] }) => {
-      const result = await updateUser(userId, updates, authFetch);
+    async (userId: string, updates: { role?: UserRole; groups?: string[]; disabled?: boolean }) => {
+      const result = await updateUser(userId, updates);
       revalidate();
       return result;
     },
-    [authFetch, revalidate],
+    [revalidate],
   );
 
   const removeUser = useCallback(
     async (userId: string) => {
-      await deleteUser(userId, authFetch);
+      await deleteUser(userId);
       revalidate();
     },
-    [authFetch, revalidate],
+    [revalidate],
   );
 
   return { patchUser, removeUser };

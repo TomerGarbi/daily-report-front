@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
   Ban,
 } from "lucide-react";
 import Link from "next/link";
+import { reportException } from "@/lib/errorReporter";
 
 interface ErrorInfo {
   title: string;
@@ -18,32 +20,51 @@ interface ErrorInfo {
   icon: React.ReactNode;
 }
 
-function getErrorInfo(error: Error & { status?: number }): ErrorInfo {
-  const status = error.status ?? (error as any).statusCode ?? (error as any).digest?.match?.(/(\d{3})/)?.[1];
+/**
+ * Read a numeric status code from the thrown Error. We deliberately do NOT
+ * parse `error.digest` — Next.js's digest is an opaque server-side id, not
+ * an HTTP status; the previous regex-based sniff produced misleading UIs
+ * whenever the digest happened to contain three digits.
+ */
+function getStatus(err: Error & { status?: number; statusCode?: number }): number | undefined {
+  return typeof err.status === "number"
+    ? err.status
+    : typeof err.statusCode === "number"
+      ? err.statusCode
+      : undefined;
+}
 
-  switch (Number(status)) {
+function getErrorInfo(
+  status: number | undefined,
+  t: ReturnType<typeof useTranslations>,
+): ErrorInfo {
+  switch (status) {
     case 400:
+    case 422:
       return {
-        title: "בקשה שגויה",
-        description: "הבקשה שנשלחה אינה תקינה. אנא נסה שוב.",
+        title: t("badRequestTitle"),
+        description: t("badRequestDescription"),
         icon: <Ban className="h-16 w-16 text-primary" />,
       };
     case 403:
       return {
-        title: "אין הרשאה",
-        description: "אין לך הרשאות לצפות בתוכן זה.",
+        title: t("forbiddenTitle"),
+        description: t("forbiddenDescription"),
         icon: <ShieldAlert className="h-16 w-16 text-primary" />,
       };
     case 500:
+    case 502:
+    case 503:
+    case 504:
       return {
-        title: "שגיאת שרת",
-        description: "אירעה שגיאה בשרת. הצוות שלנו כבר מטפל בבעיה.",
+        title: t("serverTitle"),
+        description: t("serverDescription"),
         icon: <ServerCrash className="h-16 w-16 text-primary" />,
       };
     default:
       return {
-        title: "משהו השתבש",
-        description: "אירעה שגיאה בלתי צפויה. אנא נסה שוב מאוחר יותר.",
+        title: t("genericTitle"),
+        description: t("genericDescription"),
         icon: <AlertTriangle className="h-16 w-16 text-primary" />,
       };
   }
@@ -56,11 +77,23 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useTranslations("errors.page");
+  const tRoot = useTranslations("errors");
+
   useEffect(() => {
     console.error("[App Error]", error);
+    const tags: Record<string, string> = { scope: "root" };
+    const status = getStatus(error as Error & { status?: number; statusCode?: number });
+    if (status !== undefined) tags.status = String(status);
+    reportException(error, {
+      section: "root",
+      tags,
+      extra: error.digest ? { digest: error.digest } : undefined,
+    });
   }, [error]);
 
-  const info = getErrorInfo(error as Error & { status?: number });
+  const status = getStatus(error as Error & { status?: number; statusCode?: number });
+  const info = getErrorInfo(status, t);
 
   return (
     <div
@@ -86,12 +119,12 @@ export default function Error({
         <div className="flex gap-3 justify-center">
           <Button onClick={reset} variant="default" size="lg">
             <RefreshCw className="ml-2 h-4 w-4" />
-            נסה שוב
+            {tRoot("retry")}
           </Button>
           <Button asChild variant="outline" size="lg">
             <Link href="/">
               <Home className="ml-2 h-4 w-4" />
-              דף הבית
+              {tRoot("home")}
             </Link>
           </Button>
         </div>

@@ -7,23 +7,37 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import type { AuthContextValue, LoginCredentials, User } from "@/types/auth";
-import { env } from "@/lib/env";
+import {
+  apiClient,
+  registerAuthHandlers,
+  setAuthToken,
+  toApiError,
+} from "@/lib/apiClient";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE = env.API_URL;
-
 /** Decode only the `exp` claim from a JWT (the only claim we read client-side). */
 function getExpFromToken(token: string): number | null {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const parts = token.split(".");
+    const payloadPart = parts[1];
+    if (!payloadPart) return null;
+    const payload = JSON.parse(atob(payloadPart));
     return typeof payload.exp === "number" ? payload.exp : null;
   } catch {
     return null;
   }
+}
+
+interface AuthResponse {
+  accessToken: string;
+  expiresAt?: string | null;
+  user?: User;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,13 +47,30 @@ function getExpFromToken(token: string): number | null {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessToken, setAccessTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const t = useTranslations("errors");
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guard against concurrent refresh calls
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+  // Keep the latest translator in a ref so callbacks registered once at
+  // mount can read fresh strings without re-registration.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
+  // -------------------------------------------------------------------------
+  // Token commit — updates React state AND the apiClient's cached token
+  // synchronously, so the very next apiClient call sees the new value with
+  // no useEffect race.
+  // -------------------------------------------------------------------------
+  const commitAccessToken = useCallback((token: string | null) => {
+    setAuthToken(token);
+    setAccessTokenState(token);
+  }, []);
 
   // -------------------------------------------------------------------------
   // Clear the proactive refresh timer
@@ -54,17 +85,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // -------------------------------------------------------------------------
   // Fetch user profile from GET /auth/me (authoritative source of user info)
   // -------------------------------------------------------------------------
-  const fetchMe = useCallback(async (token: string): Promise<User> => {
-    const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error("Failed to fetch user profile");
-    return res.json();
+  const fetchMe = useCallback(async (): Promise<User> => {
+    try {
+      const { data } = await apiClient.get<User>("/api/v1/auth/me");
+      return data;
+    } catch (err) {
+      throw toApiError(err, "Failed to fetch user profile");
+    }
   }, []);
 
   // -------------------------------------------------------------------------
   // Schedule a proactive refresh ~30s before the token expires.
-  // The API now returns an absolute `expiresAt` ISO timestamp on /login and
+  // The API returns an absolute `expiresAt` ISO timestamp on /login and
   // /refresh; when present we use it directly (more robust to client clock
   // drift than decoding the JWT). We fall back to decoding the token if the
   // server didn't include `expiresAt` (e.g. older API).
@@ -100,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   // -------------------------------------------------------------------------
-  // Core refresh logic (with concurrency guard)
+  // Core refresh logic (single-flight)
   // -------------------------------------------------------------------------
   const doRefresh = useCallback(async (): Promise<string | null> => {
     // If a refresh is already in-flight, return the same promise
@@ -108,27 +140,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const promise = (async (): Promise<string | null> => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          // Any non-ok from /auth/refresh means session is dead
-          clearRefreshTimer();
-          setAccessToken(null);
-          setUser(null);
-          return null;
-        }
-
-        const data: { accessToken: string; expiresAt?: string | null } =
-          await res.json();
-        setAccessToken(data.accessToken);
+        // skipAuth=true so the 401-retry interceptor doesn't try to refresh
+        // in response to a failed refresh (would recurse). withCredentials
+        // is forced by the request interceptor for this path.
+        const { data } = await apiClient.post<AuthResponse>(
+          "/api/v1/auth/refresh",
+          undefined,
+          { skipAuth: true },
+        );
+        commitAccessToken(data.accessToken);
         scheduleRefresh(data.accessToken, data.expiresAt);
         return data.accessToken;
       } catch {
         clearRefreshTimer();
-        setAccessToken(null);
+        commitAccessToken(null);
         setUser(null);
         return null;
       } finally {
@@ -139,10 +164,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshPromiseRef.current = promise;
     return promise;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearRefreshTimer, scheduleRefresh]);
+  }, [clearRefreshTimer, commitAccessToken, scheduleRefresh]);
 
-  /** Public alias for consumers (useAuthFetch, etc.) */
+  /** Public alias for context consumers. */
   const refreshAccessToken = doRefresh;
+
+  // -------------------------------------------------------------------------
+  // Register the refresh callback with the shared apiClient. Registered
+  // once on mount; the single-flight `doRefresh` is stable across renders
+  // and the module-level token cache is kept in sync by `commitAccessToken`.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const unregister = registerAuthHandlers({
+      refreshAccessToken: doRefresh,
+      onAuthFailure: () => {
+        // Session is dead — surface a toast so the user knows why they're
+        // being redirected, then clear local state. Route-level guards
+        // handle the actual redirect.
+        toast.error(tRef.current("sessionExpired"));
+        clearRefreshTimer();
+        commitAccessToken(null);
+        setUser(null);
+      },
+      onPermissionDenied: () => {
+        toast.error(tRef.current("permissionDenied"));
+      },
+    });
+    return unregister;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // -------------------------------------------------------------------------
   // On mount — silent refresh to restore session + hydrate user via /auth/me
@@ -152,29 +202,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-
-        if (!res.ok) throw new Error("refresh failed");
-
-        const {
-          accessToken: token,
-          expiresAt,
-        }: { accessToken: string; expiresAt?: string | null } = await res.json();
-
+        const token = await doRefresh();
         if (cancelled) return;
 
-        setAccessToken(token);
-        scheduleRefresh(token, expiresAt);
-
-        // Hydrate user from GET /auth/me — never decode from the token
-        const me = await fetchMe(token);
-        if (!cancelled) setUser(me);
+        if (token) {
+          // Hydrate user from GET /auth/me — never decode from the token
+          const me = await fetchMe();
+          if (!cancelled) setUser(me);
+        }
       } catch {
         if (!cancelled) {
-          setAccessToken(null);
+          commitAccessToken(null);
           setUser(null);
         }
       } finally {
@@ -194,51 +232,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // -------------------------------------------------------------------------
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<void> => {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(credentials),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          (body as { message?: string }).message ?? "Login failed"
+      let data: AuthResponse;
+      try {
+        // skipAuth=true because no Bearer exists yet; withCredentials is
+        // forced by the request interceptor for this path.
+        const res = await apiClient.post<AuthResponse>(
+          "/api/v1/auth/login",
+          credentials,
+          { skipAuth: true },
         );
+        data = res.data;
+      } catch (err) {
+        throw toApiError(err, "Login failed");
       }
 
-      const data: { accessToken: string; expiresAt?: string | null; user: User } =
-        await res.json();
-
-      setAccessToken(data.accessToken);
+      commitAccessToken(data.accessToken);
       scheduleRefresh(data.accessToken, data.expiresAt);
 
-      // Hydrate user from GET /auth/me (authoritative source)
-      const me = await fetchMe(data.accessToken);
+      // Hydrate user from GET /auth/me (authoritative source). Bearer will
+      // be attached automatically by the interceptor now that the token is
+      // set synchronously via commitAccessToken().
+      const me = await fetchMe();
       setUser(me);
     },
-    [fetchMe, scheduleRefresh]
+    [commitAccessToken, fetchMe, scheduleRefresh]
   );
 
   // -------------------------------------------------------------------------
-  // Logout — requires both Bearer token and credentials: "include"
+  // Logout — requires both Bearer token and the refresh cookie.
+  // Both are handled by the interceptors: Bearer via the module-level token,
+  // cookie via the AUTH_COOKIE_PATHS `withCredentials` override.
   // -------------------------------------------------------------------------
   const logout = useCallback(async (): Promise<void> => {
     try {
-      await fetch(`${API_BASE}/api/v1/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-        headers: accessToken
-          ? { Authorization: `Bearer ${accessToken}` }
-          : undefined,
-      });
+      await apiClient.post("/api/v1/auth/logout");
+    } catch {
+      // Best-effort — always clear local state even if the network call fails.
     } finally {
       clearRefreshTimer();
-      setAccessToken(null);
+      commitAccessToken(null);
       setUser(null);
     }
-  }, [accessToken, clearRefreshTimer]);
+  }, [clearRefreshTimer, commitAccessToken]);
 
   // -------------------------------------------------------------------------
   // Context value

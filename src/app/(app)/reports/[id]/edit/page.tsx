@@ -31,7 +31,6 @@ import { forecastSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { useReport, useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
 import type { FuelSite } from "@/types/fuelSite";
 import { Spinner } from "@/components/Spinner";
@@ -48,7 +47,6 @@ export default function EditReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const authFetch = useAuthFetch();
   const { report, isLoading: reportLoading, error: reportError } = useReport(id);
   const { updateReport } = useReportMutations();
 
@@ -117,11 +115,11 @@ export default function EditReportPage() {
   // ── Load fuel-site catalog once ────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    fetchFuelSites(authFetch)
+    fetchFuelSites()
       .then((s) => { if (!cancelled) setFuelSites(s); })
       .catch((err) => console.error("[EditReport] fetchFuelSites failed:", err));
     return () => { cancelled = true; };
-  }, [authFetch]);
+  }, []);
   // ── Warn on refresh / tab close ───────────────────────────────────────
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -493,6 +491,14 @@ export default function EditReportPage() {
                 <span>חזרה לדלקים</span>
               </Button>
               <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, status: report.status, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
                 <Button
                   size="lg"
                   variant="outline"

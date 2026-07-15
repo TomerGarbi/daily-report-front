@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Report } from "@/types/report";
 import {
   Table,
@@ -34,6 +35,7 @@ export function ReportsTable({
   error,
   onDelete,
 }: ReportsTableProps) {
+  const tErrors = useTranslations("errors.sections");
   return (
     <div className="rounded-2xl border border-orange-200 bg-white shadow-sm overflow-hidden">
       <Table>
@@ -63,7 +65,7 @@ export function ReportsTable({
                 aria-live="assertive"
                 className="py-16 text-center text-rose-500"
               >
-                שגיאה בטעינת הדוחות
+                {tErrors("reports")}
               </TableCell>
             </TableRow>
           ) : reports.length === 0 ? (

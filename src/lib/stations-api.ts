@@ -4,7 +4,8 @@
  * URL builders, response normalizers, and mutation helpers for the
  * /stations and /stations/:id/units endpoints.
  *
- * Mirrors the conventions used by `users-api.ts` and `lib/api.ts`.
+ * All requests go through the shared `apiClient` (axios) — auth, refresh,
+ * and request-id headers are handled by its interceptors.
  */
 
 import type {
@@ -16,8 +17,7 @@ import type {
   UpdateStationPayload,
   UnitPayload,
 } from "@/types/station";
-
-type AuthFetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
+import { apiClient, toApiError } from "@/lib/apiClient";
 
 // ─── URL builders ─────────────────────────────────────────────────────────────
 
@@ -51,100 +51,94 @@ export function normalizeStation(raw: Station): Station {
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
 
-async function parseError(res: Response, fallback: string): Promise<Error> {
-  const body = await res.json().catch(() => ({}));
-  const msg = (body as { message?: string }).message ?? `${fallback} (${res.status})`;
-  return new Error(msg);
-}
-
 /**
  * Fetch the full station catalog (or a filtered slice). Used by callers
  * that need the data eagerly outside of the SWR hook (e.g. seeding a new
  * report from the catalog).
  */
 export async function fetchStations(
-  authFetch: AuthFetchFn,
   params: StationsQueryParams = {},
 ): Promise<Station[]> {
-  const res = await authFetch(buildStationsUrl({ limit: 200, ...params }));
-  if (!res.ok) throw await parseError(res, "שגיאה בטעינת קטלוג התחנות");
-  return parseStationsList(await res.json()).data;
+  try {
+    const { data } = await apiClient.get(buildStationsUrl({ limit: 200, ...params }));
+    return parseStationsList(data).data;
+  } catch (err) {
+    throw toApiError(err, "שגיאה בטעינת קטלוג התחנות");
+  }
 }
 
-export async function createStation(
-  authFetch: AuthFetchFn,
-  payload: CreateStationPayload,
-): Promise<Station> {
-  const res = await authFetch("/api/v1/stations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה ביצירת תחנה");
-  return normalizeStation((await res.json()) as Station);
+export async function createStation(payload: CreateStationPayload): Promise<Station> {
+  try {
+    const { data } = await apiClient.post("/api/v1/stations", payload);
+    return normalizeStation(data as Station);
+  } catch (err) {
+    throw toApiError(err, "שגיאה ביצירת תחנה");
+  }
 }
 
 export async function updateStation(
-  authFetch: AuthFetchFn,
   id: string,
   payload: UpdateStationPayload,
 ): Promise<Station> {
-  const res = await authFetch(`/api/v1/stations/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בעדכון תחנה");
-  return normalizeStation((await res.json()) as Station);
+  try {
+    const { data } = await apiClient.patch(`/api/v1/stations/${id}`, payload);
+    return normalizeStation(data as Station);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בעדכון תחנה");
+  }
 }
 
-export async function deleteStation(
-  authFetch: AuthFetchFn,
-  id: string,
-): Promise<void> {
-  const res = await authFetch(`/api/v1/stations/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await parseError(res, "שגיאה במחיקת תחנה");
+export async function deleteStation(id: string): Promise<void> {
+  try {
+    await apiClient.delete(`/api/v1/stations/${id}`);
+  } catch (err) {
+    throw toApiError(err, "שגיאה במחיקת תחנה");
+  }
 }
 
 export async function addUnit(
-  authFetch: AuthFetchFn,
   stationId: string,
   payload: UnitPayload,
 ): Promise<Station> {
-  const res = await authFetch(`/api/v1/stations/${stationId}/units`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בהוספת יחידה");
-  return normalizeStation((await res.json()) as Station);
+  try {
+    const { data } = await apiClient.post(
+      `/api/v1/stations/${stationId}/units`,
+      payload,
+    );
+    return normalizeStation(data as Station);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בהוספת יחידה");
+  }
 }
 
 export async function updateUnit(
-  authFetch: AuthFetchFn,
   stationId: string,
   unitId: string,
   payload: Partial<UnitPayload>,
 ): Promise<Station> {
-  const res = await authFetch(`/api/v1/stations/${stationId}/units/${unitId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בעדכון יחידה");
-  return normalizeStation((await res.json()) as Station);
+  try {
+    const { data } = await apiClient.patch(
+      `/api/v1/stations/${stationId}/units/${unitId}`,
+      payload,
+    );
+    return normalizeStation(data as Station);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בעדכון יחידה");
+  }
 }
 
 export async function removeUnit(
-  authFetch: AuthFetchFn,
   stationId: string,
   unitId: string,
 ): Promise<Station> {
-  const res = await authFetch(`/api/v1/stations/${stationId}/units/${unitId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה במחיקת יחידה");
-  return normalizeStation((await res.json()) as Station);
+  try {
+    const { data } = await apiClient.delete(
+      `/api/v1/stations/${stationId}/units/${unitId}`,
+    );
+    return normalizeStation(data as Station);
+  } catch (err) {
+    throw toApiError(err, "שגיאה במחיקת יחידה");
+  }
 }
 
 // ─── Response shape helper (used by the SWR hook) ─────────────────────────────

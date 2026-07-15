@@ -29,5 +29,43 @@
     "submit": "Sign in",
     "submitting": "Signing in…",
     "error": "Invalid username or password"
+  },
+  "errors": {
+    "sessionExpired": "Your session has expired. Please sign in again.",
+    "permissionDenied": "You don't have permission to perform this action",
+    "generic": "An unexpected error occurred",
+    "network": "Network error contacting the server",
+    "retry": "Try again",
+    "home": "Home",
+    "sections": {
+      "generic": "Failed to load section",
+      "charts": "Failed to load charts",
+      "reports": "Failed to load reports",
+      "reportsFuelCatalog": "Failed to load fuel-site catalog",
+      "reportsData": "Failed to load data — opened a blank report",
+      "reportSave": "Failed to save report",
+      "reportUpdate": "Failed to update report",
+      "reportDelete": "Failed to delete report",
+      "stations": "Failed to load stations",
+      "stationDelete": "Failed to delete station",
+      "fuelSites": "Failed to load fuel sites",
+      "fuelSiteDelete": "Failed to delete fuel site",
+      "users": "Failed to load users",
+      "userUpdate": "Failed to update user",
+      "userDelete": "Failed to delete user",
+      "logs": "Failed to load logs",
+      "catalog": "Failed to load catalog",
+      "weather": "Failed to load weather forecast — you can enter it manually."
+    },
+    "page": {
+      "badRequestTitle": "Bad request",
+      "badRequestDescription": "The request was not valid. Please try again.",
+      "forbiddenTitle": "Access denied",
+      "forbiddenDescription": "You don't have permission to view this content.",
+      "serverTitle": "Server error",
+      "serverDescription": "A server error occurred. Our team is looking into it.",
+      "genericTitle": "Something went wrong",
+      "genericDescription": "An unexpected error occurred. Please try again later."
+    }
   }
 }

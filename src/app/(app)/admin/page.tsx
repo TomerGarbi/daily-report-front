@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
 import { useLogs, useLogStats } from "@/hooks/useLogs";
 import { useUsers, useUserStats, useUserMutations } from "@/hooks/useUsers";
@@ -10,8 +11,17 @@ import { FullPageSpinner } from "@/components/Spinner";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ShieldCheck, ArrowRight, LayoutDashboard, Users, ScrollText } from "lucide-react";
-import { AdminOverview } from "@/components/admin/AdminOverview";
+import { ShieldCheck, ArrowRight, LayoutDashboard, Users, ScrollText, Activity as ActivityIcon } from "lucide-react";
+// AdminOverview drags in the full `recharts` bundle (~150 KB gzipped). Load
+// it only when the admin tab is actually mounted — the "logs" and "users"
+// tabs never need it, so this shaves the initial admin-page chunk noticeably.
+const AdminOverview = dynamic(
+  () => import("@/components/admin/AdminOverview").then((m) => ({ default: m.AdminOverview })),
+  {
+    ssr: false,
+    loading: () => <FullPageSpinner />,
+  },
+);
 import { LogStatsCards } from "@/components/admin/LogStatsCards";
 import { LogFilterBar, type LogFilters } from "@/components/admin/LogFilterBar";
 import { LogTable } from "@/components/admin/LogTable";
@@ -20,8 +30,10 @@ import { UserStatsCards } from "@/components/admin/UserStatsCards";
 import { UserFilterBar, type UserFilters } from "@/components/admin/UserFilterBar";
 import { UserTable } from "@/components/admin/UserTable";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
+import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import type { LogEntry } from "@/types/log";
-import type { UserEntry, UserRole } from "@/types/user";
+import type { UserEntry, UserRole, UserSortField } from "@/types/user";
 import { toast } from "sonner";
 
 const LOG_PAGE_SIZE = 50;
@@ -39,6 +51,7 @@ const EMPTY_LOG_FILTERS: LogFilters = {
 const EMPTY_USER_FILTERS: UserFilters = {
   role: undefined,
   search: undefined,
+  status: undefined,
 };
 
 export default function AdminPage() {
@@ -82,11 +95,30 @@ export default function AdminPage() {
   // ── User state ─────────────────────────────────────────────────────────────
   const [userFilters, setUserFilters] = useState<UserFilters>(EMPTY_USER_FILTERS);
   const [userPage, setUserPage] = useState(1);
+  const [userSort, setUserSort] = useState<{ field: UserSortField; order: "asc" | "desc" }>({
+    field: "username",
+    order: "asc",
+  });
   const [editingUser, setEditingUser] = useState<UserEntry | null>(null);
+  const [viewingUser, setViewingUser] = useState<UserEntry | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleUserFiltersChange = useCallback((f: UserFilters) => {
     setUserFilters(f);
+    setUserPage(1);
+  }, []);
+
+  /**
+   * Toggle sort direction when clicking the same column, otherwise switch
+   * columns and use a sensible default: username asc, dates desc.
+   */
+  const handleUserSort = useCallback((field: UserSortField) => {
+    setUserSort((prev) => {
+      if (prev.field === field) {
+        return { field, order: prev.order === "asc" ? "desc" : "asc" };
+      }
+      return { field, order: field === "username" ? "asc" : "desc" };
+    });
     setUserPage(1);
   }, []);
 
@@ -100,6 +132,9 @@ export default function AdminPage() {
   } = useUsers({
     role: userFilters.role || undefined,
     search: userFilters.search || undefined,
+    status: userFilters.status || undefined,
+    sort: userSort.field,
+    order: userSort.order,
     page: userPage,
     limit: USER_PAGE_SIZE,
   });
@@ -212,6 +247,12 @@ export default function AdminPage() {
                 יומן מערכת
               </TabsTrigger>
             )}
+            {canViewLogs && (
+              <TabsTrigger value="activity" className="gap-1.5 rounded-xl px-4 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <ActivityIcon className="h-4 w-4" />
+                פעילות
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ── Overview tab ─────────────────────────────────────────── */}
@@ -239,8 +280,12 @@ export default function AdminPage() {
               currentUsername={user?.username}
               isLoading={usersLoading}
               error={usersError ? String(usersError) : null}
+              sortField={userSort.field}
+              sortOrder={userSort.order}
+              onSort={handleUserSort}
               onEdit={setEditingUser}
               onDelete={handleDeleteUser}
+              onOpenDetails={setViewingUser}
             />
 
             <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -260,6 +305,25 @@ export default function AdminPage() {
               onSave={handleEditSave}
               groupOptions={groupOptions}
               saving={saving}
+            />
+
+            <UserDetailDrawer
+              user={viewingUser}
+              open={!!viewingUser}
+              onOpenChange={(open) => { if (!open) setViewingUser(null); }}
+              currentUsername={user?.username}
+              onEdit={(u) => { setViewingUser(null); setEditingUser(u); }}
+              onToggleDisabled={async (u, disabled) => {
+                try {
+                  await patchUser(u._id, { disabled });
+                  toast.success(disabled ? "המשתמש הושבת" : "המשתמש הופעל");
+                  // Reflect change immediately so the drawer badge updates
+                  // without waiting for SWR revalidation.
+                  setViewingUser({ ...u, disabled });
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "שגיאה בעדכון סטטוס משתמש");
+                }
+              }}
             />
           </TabsContent>
 
@@ -296,6 +360,13 @@ export default function AdminPage() {
               onOpenChange={(open) => { if (!open) setSelectedLog(null); }}
             />
           </TabsContent>
+
+          {/* ── Activity tab ─────────────────────────────────────────── */}
+          {canViewLogs && (
+            <TabsContent value="activity" className="mt-6 space-y-6">
+              <ActivityFeed limit={50} variant="full" live title="פעילות אחרונה במערכת" />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

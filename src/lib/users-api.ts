@@ -2,9 +2,12 @@
  * users-api.ts
  *
  * URL builders and mutation helpers for the /users endpoints.
+ * All requests go through the shared `apiClient` (axios) — auth, refresh,
+ * and request-id headers are handled by its interceptors.
  */
 
-import type { UserRole } from "@/types/user";
+import type { UserRole, UserStatus, UserSortField } from "@/types/user";
+import { apiClient, toApiError } from "@/lib/apiClient";
 
 // ─── URL builder ──────────────────────────────────────────────────────────────
 
@@ -12,6 +15,9 @@ export interface UsersQueryParams {
   role?: UserRole;
   group?: string;
   search?: string;
+  status?: UserStatus;
+  sort?: UserSortField;
+  order?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -21,6 +27,9 @@ export function buildUsersUrl(params: UsersQueryParams = {}): string {
   if (params.role)              q.set("role", params.role);
   if (params.group)             q.set("group", params.group);
   if (params.search)            q.set("search", params.search);
+  if (params.status)            q.set("status", params.status);
+  if (params.sort)              q.set("sort", params.sort);
+  if (params.order)             q.set("order", params.order);
   if (params.page != null)      q.set("page", String(params.page));
   if (params.limit != null)     q.set("limit", String(params.limit));
   return `/api/v1/users?${q.toString()}`;
@@ -32,29 +41,20 @@ export const USERS_STATS_URL = "/api/v1/users/stats";
 
 export async function updateUser(
   userId: string,
-  updates: { role?: UserRole; groups?: string[] },
-  authFetch: (input: string | URL, init?: RequestInit) => Promise<Response>,
+  updates: { role?: UserRole; groups?: string[]; disabled?: boolean },
 ) {
-  const res = await authFetch(`/api/v1/users/${userId}`, {
-    method: "PATCH",
-    body: JSON.stringify(updates),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? "Failed to update user");
+  try {
+    const { data } = await apiClient.patch(`/api/v1/users/${userId}`, updates);
+    return data;
+  } catch (err) {
+    throw toApiError(err, "Failed to update user");
   }
-  return res.json();
 }
 
-export async function deleteUser(
-  userId: string,
-  authFetch: (input: string | URL, init?: RequestInit) => Promise<Response>,
-) {
-  const res = await authFetch(`/api/v1/users/${userId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? "Failed to delete user");
+export async function deleteUser(userId: string): Promise<void> {
+  try {
+    await apiClient.delete(`/api/v1/users/${userId}`);
+  } catch (err) {
+    throw toApiError(err, "Failed to delete user");
   }
 }

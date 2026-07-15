@@ -77,7 +77,11 @@ export default function CalendarPage() {
   // Modal derived state
   const modalDate = useMemo(() => {
     if (!modalDayKey) return null;
-    const [y, m, d] = modalDayKey.split("-").map(Number);
+    const parts = modalDayKey.split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    if (y === undefined || m === undefined || d === undefined) return null;
     return new Date(y, m - 1, d);
   }, [modalDayKey]);
   const modalEvents = useMemo(

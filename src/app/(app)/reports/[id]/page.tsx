@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { FileText, ArrowRight, Calendar, User, Tag, Pencil } from "lucide-react";
 import { useReport } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { FuelGroupedTables } from "@/components/reports/FuelGroupedTables";
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
@@ -48,17 +47,16 @@ export default function ReportViewPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const authFetch = useAuthFetch();
   const { report, isLoading, error } = useReport(id);
   const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    fetchFuelSites(authFetch)
+    fetchFuelSites()
       .then((s) => { if (!cancelled) setFuelSites(s); })
       .catch((err) => console.error("[ReportView] fetchFuelSites failed:", err));
     return () => { cancelled = true; };
-  }, [authFetch]);
+  }, []);
 
   if (isLoading) {
     return (

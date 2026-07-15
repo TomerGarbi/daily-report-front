@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WifiOff, RefreshCw, Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/apiClient";
 
 export default function OfflinePage() {
   const [checking, setChecking] = useState(false);
@@ -10,16 +11,14 @@ export default function OfflinePage() {
   const checkConnection = async () => {
     setChecking(true);
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-      const res = await fetch(`${API_BASE}/health`, {
-        cache: "no-store",
+      await apiClient.get("/health", {
+        skipAuth: true,
+        timeout: 5000,
         signal: AbortSignal.timeout(5000),
       });
-      if (res.ok) {
-        // API is back — go home
-        window.location.href = "/";
-        return;
-      }
+      // API is back — go home
+      window.location.href = "/";
+      return;
     } catch {
       // still offline
     } finally {

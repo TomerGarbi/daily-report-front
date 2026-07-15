@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Table,
   TableBody,
@@ -42,6 +43,7 @@ export function FuelSitesTable({
   onEdit,
   onDelete,
 }: FuelSitesTableProps) {
+  const tErrors = useTranslations("errors.sections");
   const [pendingDelete, setPendingDelete] = useState<FuelSite | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -82,7 +84,7 @@ export function FuelSitesTable({
             ) : error ? (
               <TableRow>
                 <TableCell colSpan={canManage ? 6 : 5} className="py-16 text-center text-rose-500">
-                  שגיאה בטעינת אתרי הדלק
+                  {tErrors("fuelSites")}
                 </TableCell>
               </TableRow>
             ) : sites.length === 0 ? (

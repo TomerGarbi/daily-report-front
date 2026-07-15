@@ -1,12 +1,21 @@
 /**
  * api.ts
  *
- * Typed API helpers: URL builders, response parsers, and mutation functions.
- * Pure functions — they don't know about auth or React.
- * Mutation functions receive a pre-bound `authFetch` and return typed data.
+ * Typed API helpers for the /reports endpoints: URL builders, response
+ * parsers, and mutation functions.
+ *
+ * All requests go through the shared `apiClient` (axios) — auth, refresh,
+ * and request-id headers are handled by its interceptors.
  */
 
-import { Report, ReportStatus, ReportContent, ArchiveData, LastYearArchiveData } from "@/types/report";
+import {
+  Report,
+  ReportStatus,
+  ReportContent,
+  ArchiveData,
+  LastYearArchiveData,
+} from "@/types/report";
+import { apiClient, toApiError } from "@/lib/apiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,11 +36,6 @@ export interface CreateReportPayload {
 }
 
 export interface UpdateReportPayload extends Partial<CreateReportPayload> {}
-
-export interface ApiError extends Error {
-  status?: number;
-  body?: Record<string, unknown>;
-}
 
 // ─── URL builders ─────────────────────────────────────────────────────────────
 
@@ -112,104 +116,59 @@ export function parsePaginatedReports(json: unknown): PaginatedReports {
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
-// These accept the authFetch function so they stay decoupled from React hooks.
-
-type AuthFetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
-
-function createApiError(message: string, status?: number, body?: Record<string, unknown>): ApiError {
-  const err = new Error(message) as ApiError;
-  err.status = status;
-  err.body = body;
-  return err;
-}
 
 /** POST /api/v1/reports — create a new report. */
 export async function createReport(
-  authFetch: AuthFetchFn,
   payload: CreateReportPayload,
 ): Promise<Report> {
-  const res = await authFetch("/api/v1/reports", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw createApiError(
-      (body as { message?: string }).message ?? `שגיאה ביצירת הדוח (${res.status})`,
-      res.status,
-      body as Record<string, unknown>,
-    );
+  try {
+    const { data } = await apiClient.post("/api/v1/reports", payload);
+    return normalizeReport(data as Report);
+  } catch (err) {
+    throw toApiError(err, "שגיאה ביצירת הדוח");
   }
-
-  const json = await res.json();
-  return normalizeReport(json as Report);
 }
 
 /** PATCH /api/v1/reports/:id — update an existing report. */
 export async function updateReport(
-  authFetch: AuthFetchFn,
   id: string,
   payload: UpdateReportPayload,
 ): Promise<Report> {
-  const res = await authFetch(`/api/v1/reports/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw createApiError(
-      (body as { message?: string }).message ?? `שגיאה בעדכון הדוח (${res.status})`,
-      res.status,
-      body as Record<string, unknown>,
-    );
+  try {
+    const { data } = await apiClient.patch(`/api/v1/reports/${id}`, payload);
+    return normalizeReport(data as Report);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בעדכון הדוח");
   }
-
-  const json = await res.json();
-  return normalizeReport(json as Report);
 }
 
 /** DELETE /api/v1/reports/:id — delete a report. */
-export async function deleteReport(
-  authFetch: AuthFetchFn,
-  id: string,
-): Promise<void> {
-  const res = await authFetch(`/api/v1/reports/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw createApiError(
-      (body as { message?: string }).message ?? `שגיאה במחיקת הדוח (${res.status})`,
-      res.status,
-      body as Record<string, unknown>,
-    );
+export async function deleteReport(id: string): Promise<void> {
+  try {
+    await apiClient.delete(`/api/v1/reports/${id}`);
+  } catch (err) {
+    throw toApiError(err, "שגיאה במחיקת הדוח");
   }
 }
 
 /** Fetch the user's latest report with full content. */
-export async function fetchLatestReport(
-  authFetch: AuthFetchFn,
-): Promise<Report | null> {
+export async function fetchLatestReport(): Promise<Report | null> {
   // Step 1: get the most recent report ID from the list endpoint
   // API already sorts by createdAt desc by default
-  const listRes = await authFetch("/api/v1/reports?limit=1");
-  if (!listRes.ok) return null;
-  const listJson = await listRes.json();
-  const reports = parseReportsList(listJson);
-  if (reports.length === 0) return null;
+  try {
+    const { data: listJson } = await apiClient.get("/api/v1/reports?limit=1");
+    const reports = parseReportsList(listJson);
+    const first = reports[0];
+    if (!first) return null;
 
-  // Step 2: fetch the full report (with content) by ID
-  const id = reports[0].id || reports[0]._id;
-  if (!id) return null;
-  const detailRes = await authFetch(`/api/v1/reports/${id}`);
-  if (!detailRes.ok) return null;
-  const detailJson = await detailRes.json();
-  return normalizeReport(detailJson as Report);
+    const id = first.id || first._id;
+    if (!id) return null;
+
+    const { data: detailJson } = await apiClient.get(`/api/v1/reports/${id}`);
+    return normalizeReport(detailJson as Report);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -218,26 +177,27 @@ export async function fetchLatestReport(
  * stepper section. Returns `null` on transport-level failure; `hasData`
  * on the payload signals upstream-data availability for the empty state.
  */
-export async function fetchYesterdayArchive(
-  authFetch: AuthFetchFn,
-): Promise<ArchiveData | null> {
-  const res = await authFetch("/api/v1/reports/archive/yesterday");
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json as ArchiveData;
+export async function fetchYesterdayArchive(): Promise<ArchiveData | null> {
+  try {
+    const { data } = await apiClient.get("/api/v1/reports/archive/yesterday");
+    return data as ArchiveData;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Fetch the same calendar day one year ago, for the report's archive
  * year-over-year comparison panel.
  */
-export async function fetchLastYearArchive(
-  authFetch: AuthFetchFn,
-): Promise<LastYearArchiveData | null> {
-  const res = await authFetch("/api/v1/reports/archive/last-year");
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json as LastYearArchiveData;
+export async function fetchLastYearArchive(): Promise<LastYearArchiveData | null> {
+  try {
+    const { data } = await apiClient.get("/api/v1/reports/archive/last-year");
+    return data as LastYearArchiveData;
+  } catch {
+    return null;
+  }
 }
 
-
+// Re-export ApiError so existing imports from "@/lib/api" keep working.
+export type { ApiError } from "@/lib/apiClient";

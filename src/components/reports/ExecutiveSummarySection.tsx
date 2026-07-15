@@ -327,7 +327,7 @@ function StationStatusJobsList({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">
-                {stationName} — יחידה {row.stationNumber}
+                {row.stationName ?? stationName} — יחידה {row.stationNumber}
               </p>
               <p className="mt-0.5 text-xs text-slate-500">
                 {ownershipLabel[ownership]} · {STATION_FUEL_LABELS[fuel]}

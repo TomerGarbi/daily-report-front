@@ -3,6 +3,9 @@
  *
  * URL builders, response normalizers, and mutation helpers for the
  * /fuel-sites endpoints. Mirrors `stations-api.ts`.
+ *
+ * All requests go through the shared `apiClient` (axios) — auth, refresh,
+ * and request-id headers are handled by its interceptors.
  */
 
 import type {
@@ -13,8 +16,7 @@ import type {
   TankPayload,
 } from "@/types/fuelSite";
 import type { StationFuel } from "@/types/station";
-
-type AuthFetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
+import { apiClient, toApiError } from "@/lib/apiClient";
 
 export interface FuelSitesQueryParams {
   fuel?: StationFuel;
@@ -40,95 +42,91 @@ export function normalizeFuelSite(raw: FuelSite): FuelSite {
   };
 }
 
-async function parseError(res: Response, fallback: string): Promise<Error> {
-  const body = await res.json().catch(() => ({}));
-  const msg = (body as { message?: string }).message ?? `${fallback} (${res.status})`;
-  return new Error(msg);
-}
-
 export async function fetchFuelSites(
-  authFetch: AuthFetchFn,
   params: FuelSitesQueryParams = {},
 ): Promise<FuelSite[]> {
-  const res = await authFetch(buildFuelSitesUrl({ limit: 200, ...params }));
-  if (!res.ok) throw await parseError(res, "שגיאה בטעינת קטלוג אתרי הדלק");
-  return parseFuelSitesList(await res.json()).data;
+  try {
+    const { data } = await apiClient.get(buildFuelSitesUrl({ limit: 200, ...params }));
+    return parseFuelSitesList(data).data;
+  } catch (err) {
+    throw toApiError(err, "שגיאה בטעינת קטלוג אתרי הדלק");
+  }
 }
 
 export async function createFuelSite(
-  authFetch: AuthFetchFn,
   payload: CreateFuelSitePayload,
 ): Promise<FuelSite> {
-  const res = await authFetch("/api/v1/fuel-sites", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה ביצירת אתר דלק");
-  return normalizeFuelSite((await res.json()) as FuelSite);
+  try {
+    const { data } = await apiClient.post("/api/v1/fuel-sites", payload);
+    return normalizeFuelSite(data as FuelSite);
+  } catch (err) {
+    throw toApiError(err, "שגיאה ביצירת אתר דלק");
+  }
 }
 
 export async function updateFuelSite(
-  authFetch: AuthFetchFn,
   id: string,
   payload: UpdateFuelSitePayload,
 ): Promise<FuelSite> {
-  const res = await authFetch(`/api/v1/fuel-sites/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בעדכון אתר דלק");
-  return normalizeFuelSite((await res.json()) as FuelSite);
+  try {
+    const { data } = await apiClient.patch(`/api/v1/fuel-sites/${id}`, payload);
+    return normalizeFuelSite(data as FuelSite);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בעדכון אתר דלק");
+  }
 }
 
-export async function deleteFuelSite(
-  authFetch: AuthFetchFn,
-  id: string,
-): Promise<void> {
-  const res = await authFetch(`/api/v1/fuel-sites/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await parseError(res, "שגיאה במחיקת אתר דלק");
+export async function deleteFuelSite(id: string): Promise<void> {
+  try {
+    await apiClient.delete(`/api/v1/fuel-sites/${id}`);
+  } catch (err) {
+    throw toApiError(err, "שגיאה במחיקת אתר דלק");
+  }
 }
 
 export async function addTank(
-  authFetch: AuthFetchFn,
   siteId: string,
   payload: TankPayload,
 ): Promise<FuelSite> {
-  const res = await authFetch(`/api/v1/fuel-sites/${siteId}/tanks`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בהוספת מיכל");
-  return normalizeFuelSite((await res.json()) as FuelSite);
+  try {
+    const { data } = await apiClient.post(
+      `/api/v1/fuel-sites/${siteId}/tanks`,
+      payload,
+    );
+    return normalizeFuelSite(data as FuelSite);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בהוספת מיכל");
+  }
 }
 
 export async function updateTank(
-  authFetch: AuthFetchFn,
   siteId: string,
   tankId: string,
   payload: Partial<TankPayload>,
 ): Promise<FuelSite> {
-  const res = await authFetch(`/api/v1/fuel-sites/${siteId}/tanks/${tankId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה בעדכון מיכל");
-  return normalizeFuelSite((await res.json()) as FuelSite);
+  try {
+    const { data } = await apiClient.patch(
+      `/api/v1/fuel-sites/${siteId}/tanks/${tankId}`,
+      payload,
+    );
+    return normalizeFuelSite(data as FuelSite);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בעדכון מיכל");
+  }
 }
 
 export async function removeTank(
-  authFetch: AuthFetchFn,
   siteId: string,
   tankId: string,
 ): Promise<FuelSite> {
-  const res = await authFetch(`/api/v1/fuel-sites/${siteId}/tanks/${tankId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw await parseError(res, "שגיאה במחיקת מיכל");
-  return normalizeFuelSite((await res.json()) as FuelSite);
+  try {
+    const { data } = await apiClient.delete(
+      `/api/v1/fuel-sites/${siteId}/tanks/${tankId}`,
+    );
+    return normalizeFuelSite(data as FuelSite);
+  } catch (err) {
+    throw toApiError(err, "שגיאה במחיקת מיכל");
+  }
 }
 
 export function parseFuelSitesList(json: unknown): FuelSitesListResponse {

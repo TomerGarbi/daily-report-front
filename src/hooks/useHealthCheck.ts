@@ -2,9 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { apiClient } from "@/lib/apiClient";
 
-const HEALTH_INTERVAL = 30_000; // check every 30 seconds
-const HEALTH_TIMEOUT = 5_000; // 5 second request timeout
+/** Interval when the server is healthy. */
+const BASE_INTERVAL_MS = 30_000;
+/** Cap for the exponential backoff when the server keeps failing. */
+const MAX_INTERVAL_MS = 120_000;
+/** Per-request timeout for /health. */
+const HEALTH_TIMEOUT = 5_000;
 
 export function useHealthCheck() {
   const router = useRouter();
@@ -13,41 +18,77 @@ export function useHealthCheck() {
   const checkingRef = useRef(false);
 
   useEffect(() => {
-    // Don't health-check while already on the offline page
+    // Don't health-check while already on the offline page — that page
+    // runs its own retry loop.
     if (pathname === "/offline") return;
 
-    const checkHealth = async () => {
-      if (checkingRef.current) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let currentDelay = BASE_INTERVAL_MS;
+    let failures = 0;
+
+    const schedule = (delay: number): void => {
+      if (cancelled) return;
+      timer = setTimeout(run, delay);
+    };
+
+    const run = async (): Promise<void> => {
+      // Skip while the tab is hidden — resuming from background will
+      // trigger the visibility listener below.
+      if (typeof document !== "undefined" && document.hidden) {
+        schedule(currentDelay);
+        return;
+      }
+      if (checkingRef.current) {
+        schedule(currentDelay);
+        return;
+      }
       checkingRef.current = true;
 
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-        const res = await fetch(`${API_BASE}/health`, {
-          cache: "no-store",
+        await apiClient.get("/health", {
+          skipAuth: true,
+          timeout: HEALTH_TIMEOUT,
           signal: AbortSignal.timeout(HEALTH_TIMEOUT),
         });
-
-        if (res.ok) {
-          setIsOnline(true);
-        } else {
-          setIsOnline(false);
-          router.push("/offline");
-        }
+        if (cancelled) return;
+        setIsOnline(true);
+        failures = 0;
+        currentDelay = BASE_INTERVAL_MS;
       } catch {
+        if (cancelled) return;
         setIsOnline(false);
+        failures += 1;
+        // Exponential backoff: 30s → 60s → 120s cap.
+        currentDelay = Math.min(BASE_INTERVAL_MS * 2 ** (failures - 1), MAX_INTERVAL_MS);
         router.push("/offline");
       } finally {
         checkingRef.current = false;
+        schedule(currentDelay);
       }
     };
 
-    // Initial health check
-    checkHealth();
+    // Kick off immediately on mount / route change.
+    run();
 
-    // Periodic health checks
-    const interval = setInterval(checkHealth, HEALTH_INTERVAL);
+    // When the tab becomes visible again, force an immediate re-check.
+    const onVisibility = (): void => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        if (timer) clearTimeout(timer);
+        run();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
   }, [pathname, router]);
 
   return { isOnline };

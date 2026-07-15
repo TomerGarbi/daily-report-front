@@ -27,7 +27,6 @@ import {
   type StationsQueryParams,
 } from "@/lib/stations-api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 // ─── useStations ──────────────────────────────────────────────────────────────
 
@@ -94,7 +93,6 @@ export interface UseStationMutationsReturn {
 }
 
 export function useStationMutations(): UseStationMutationsReturn {
-  const authFetch = useAuthFetch();
   const { mutate: globalMutate } = useSWRConfig();
 
   const invalidate = useCallback(() => {
@@ -107,38 +105,38 @@ export function useStationMutations(): UseStationMutationsReturn {
 
   return {
     createStation: useCallback(async (payload) => {
-      const s = await apiCreateStation(authFetch, payload);
+      const s = await apiCreateStation(payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     updateStation: useCallback(async (id, payload) => {
-      const s = await apiUpdateStation(authFetch, id, payload);
+      const s = await apiUpdateStation(id, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     deleteStation: useCallback(async (id) => {
-      await apiDeleteStation(authFetch, id);
+      await apiDeleteStation(id);
       invalidate();
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     addUnit: useCallback(async (stationId, payload) => {
-      const s = await apiAddUnit(authFetch, stationId, payload);
+      const s = await apiAddUnit(stationId, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     updateUnit: useCallback(async (stationId, unitId, payload) => {
-      const s = await apiUpdateUnit(authFetch, stationId, unitId, payload);
+      const s = await apiUpdateUnit(stationId, unitId, payload);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
 
     removeUnit: useCallback(async (stationId, unitId) => {
-      const s = await apiRemoveUnit(authFetch, stationId, unitId);
+      const s = await apiRemoveUnit(stationId, unitId);
       invalidate();
       return s;
-    }, [authFetch, invalidate]),
+    }, [invalidate]),
   };
 }

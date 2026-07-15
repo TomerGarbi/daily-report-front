@@ -23,15 +23,28 @@ export interface StationRow {
   notes?: string;
 
   // ── Optional catalog linkage ───────────────────────────────────────────────
-  // When present, this row was created from the station/unit catalog and the
-  // capacity / fuel fields below are read-only in the report form (they're
-  // edited in /settings/stations instead). Legacy free-text rows simply
-  // leave these unset.
+  // When present, this row was created from the station/unit catalog and
+  // the capacity / fuel fields below are read-only in the report form
+  // (they're edited in /settings/stations instead). Legacy free-text rows
+  // simply leave these unset.
+  //
+  // IMPORTANT — snapshot semantics:
+  //   `stationName`, `mainFuel`, `secondaryFuels` and `installedCapacity`
+  //   are FROZEN COPIES taken at row-creation time. They are NOT live
+  //   references to the catalog. Once the row is saved, later catalog
+  //   edits (rename, fuel change, capacity update, unit deletion, etc.)
+  //   have no effect on this report. This is intentional: historical
+  //   reports must remain reproducible even if the catalog changes or
+  //   the source station/unit is deleted.
+  //   `stationId` / `unitId` are kept purely for traceability — they may
+  //   dangle if the catalog entry is later removed.
   stationId?: string;
   unitId?: string;
-  /** Main fuel — default copied from the catalog unit. */
+  /** Snapshot of the station's display name at row-creation time. */
+  stationName?: string;
+  /** Snapshot of the unit's primary fuel at row-creation time. */
   mainFuel?: string;
-  /** Secondary fuels — default copied from the catalog unit. */
+  /** Snapshot of the unit's backup fuels at row-creation time. */
   secondaryFuels?: string[];
 }
 

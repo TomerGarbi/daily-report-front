@@ -2,11 +2,12 @@
  * weather-api.ts
  *
  * Read-only helpers for the `/weather` endpoint.
+ *
+ * All requests go through the shared `apiClient` (axios).
  */
 
 import type { WeatherForecastResponse } from "@/types/weather";
-
-type AuthFetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
+import { apiClient, toApiError } from "@/lib/apiClient";
 
 export function buildWeatherForecastUrl(region: string = "gush-dan"): string {
   const q = new URLSearchParams({ region });
@@ -14,14 +15,12 @@ export function buildWeatherForecastUrl(region: string = "gush-dan"): string {
 }
 
 export async function fetchWeatherForecast(
-  authFetch: AuthFetchFn,
   region: string = "gush-dan",
 ): Promise<WeatherForecastResponse> {
-  const res = await authFetch(buildWeatherForecastUrl(region));
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const msg = (body as { message?: string }).message ?? `שגיאה בטעינת תחזית מזג האוויר (${res.status})`;
-    throw new Error(msg);
+  try {
+    const { data } = await apiClient.get(buildWeatherForecastUrl(region));
+    return data as WeatherForecastResponse;
+  } catch (err) {
+    throw toApiError(err, "שגיאה בטעינת תחזית מזג האוויר");
   }
-  return (await res.json()) as WeatherForecastResponse;
 }

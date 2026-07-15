@@ -211,8 +211,9 @@ export function ArchiveSection({
   const days = extraDays ?? [];
   const handleAddDay = () => {
     if (!onExtraDaysChange) return;
-    const baseIso = days.length
-      ? days[days.length - 1].date
+    const lastDay = days[days.length - 1];
+    const baseIso = lastDay
+      ? lastDay.date
       : (block.date || emptyArchiveBlock().date);
     const newIso = prevDayIso(baseIso);
     onExtraDaysChange([...days, emptyBlockForDate(newIso)]);

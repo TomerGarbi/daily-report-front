@@ -30,7 +30,6 @@ import {
   type PaginatedReports,
 } from "@/lib/api";
 import { useAuthSWR } from "@/hooks/useAuthSWR";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 // ─── useReport (single) ──────────────────────────────────────────────────────
 
@@ -134,7 +133,6 @@ export interface UseReportMutationsReturn {
  * all SWR keys matching the reports endpoints after success.
  */
 export function useReportMutations(): UseReportMutationsReturn {
-  const authFetch = useAuthFetch();
   const { mutate: globalMutate } = useSWRConfig();
 
   /** Revalidate all SWR keys that start with /api/v1/reports */
@@ -148,28 +146,28 @@ export function useReportMutations(): UseReportMutationsReturn {
 
   const createReport = useCallback(
     async (payload: CreateReportPayload): Promise<Report> => {
-      const report = await apiCreateReport(authFetch, payload);
+      const report = await apiCreateReport(payload);
       invalidateReportsCache();
       return report;
     },
-    [authFetch, invalidateReportsCache],
+    [invalidateReportsCache],
   );
 
   const updateReport = useCallback(
     async (id: string, payload: UpdateReportPayload): Promise<Report> => {
-      const report = await apiUpdateReport(authFetch, id, payload);
+      const report = await apiUpdateReport(id, payload);
       invalidateReportsCache();
       return report;
     },
-    [authFetch, invalidateReportsCache],
+    [invalidateReportsCache],
   );
 
   const deleteReport = useCallback(
     async (id: string): Promise<void> => {
-      await apiDeleteReport(authFetch, id);
+      await apiDeleteReport(id);
       invalidateReportsCache();
     },
-    [authFetch, invalidateReportsCache],
+    [invalidateReportsCache],
   );
 
   return { createReport, updateReport, deleteReport };

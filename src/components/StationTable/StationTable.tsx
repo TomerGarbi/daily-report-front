@@ -213,7 +213,9 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
     (group: string, rowIdx: number, patch: Partial<StationRow>) => {
       if (!onChange) return;
       const updated = { ...data };
-      updated[group] = updated[group].map((row, i) =>
+      const rows = updated[group];
+      if (!rows) return;
+      updated[group] = rows.map((row, i) =>
         i === rowIdx ? { ...row, ...patch } : row
       );
       onChange(updated);
@@ -256,13 +258,23 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
   const addFromCatalog = useCallback(
     (
       stationName: string,
+      stationTag: string,
       stationId: string,
-      unit: { id?: string; _id?: string; tag: string; installedCapacity: number; mainFuel: string; secondaryFuels: string[] },
+      unit: {
+        id?: string;
+        _id?: string;
+        number: number;
+        mainFuel: { type: string; capacity: number };
+        secondaryFuels: { type: string; capacity: number }[];
+      },
     ) => {
       if (!onChange) return;
 
-      const groupName = stationName.trim() || "תחנה";
-      const rows = data[groupName] ?? [];
+      // Use the stable tag as the group key so renaming a station in the
+      // catalog never breaks existing report rows. Fall back to name if tag
+      // is somehow absent (manual / legacy rows).
+      const groupKey = stationTag.trim() || stationName.trim() || "תחנה";
+      const rows = data[groupKey] ?? [];
       const unitId = unit.id ?? unit._id;
 
       // Don't allow duplicating the same unit on the same report.
@@ -270,8 +282,8 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
 
       const maxStation = rows.reduce((max, r) => Math.max(max, r.stationNumber), 0);
       const newRow: StationRow = {
-        stationNumber:             Number(unit.tag) || maxStation + 1,
-        installedCapacity:         Number(unit.installedCapacity) || 0,
+        stationNumber:             unit.number || maxStation + 1,
+        installedCapacity:         Number(unit.mainFuel?.capacity) || 0,
         availableCapacity:         0,
         peakCapacity:              0,
         minReserveCapacity:        0,
@@ -279,11 +291,12 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
         status:                    "Active",
         stationId,
         unitId,
-        mainFuel:                  unit.mainFuel,
-        secondaryFuels:            [...(unit.secondaryFuels ?? [])],
+        stationName,
+        mainFuel:                  unit.mainFuel?.type,
+        secondaryFuels:            (unit.secondaryFuels ?? []).map((f) => f.type),
       };
 
-      onChange({ ...data, [groupName]: [...rows, newRow] });
+      onChange({ ...data, [groupKey]: [...rows, newRow] });
     },
     [data, onChange],
   );
@@ -359,6 +372,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
           <tbody>
             {groups.map((group) => {
               const rows = data[group];
+              if (!rows) return null;
               const rowCount = rows.length + (editing ? 1 : 0);
               return rows.map((row, rowIdx) => (
                 <tr
@@ -373,7 +387,7 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
                       rowSpan={rowCount}
                       className="px-4 py-3 text-center align-middle font-semibold text-slate-800 bg-slate-50/60 border-l border-slate-200 whitespace-nowrap"
                     >
-                      {group}
+                      {rows[0]?.stationName ?? group}
                     </td>
                   )}
 
@@ -680,12 +694,12 @@ export function StationTable({ data, onChange, title, readOnly = false }: Statio
       onPick={(station, unit) => {
         addFromCatalog(
           station.name,
+          station.tag,
           station.id ?? station._id ?? "",
           {
             id: unit.id,
             _id: unit._id,
-            tag: unit.tag,
-            installedCapacity: unit.installedCapacity,
+            number: unit.number,
             mainFuel: unit.mainFuel,
             secondaryFuels: unit.secondaryFuels ?? [],
           },

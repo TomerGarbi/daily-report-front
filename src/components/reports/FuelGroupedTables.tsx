@@ -17,6 +17,7 @@ import type { StationData } from "@/types/report";
 import {
   STATION_FUELS,
   STATION_FUEL_LABELS,
+  getStationMainFuel,
   type Station,
   type StationFuel,
   type StationType,
@@ -32,11 +33,12 @@ export function seedTypeFromCatalog(
   for (const s of stations) {
     if (s.type !== type) continue;
     if (!s.units || s.units.length === 0) continue;
-    const fuel = s.fuel as StationFuel;
+    const fuel = getStationMainFuel(s.units);
+    if (!fuel) continue;
     const bucket = (out[fuel] ??= {});
-    bucket[s.name] = s.units.map((u, idx) => ({
-      stationNumber:             Number(u.tag) || idx + 1,
-      installedCapacity:         u.installedCapacity,
+    bucket[s.tag] = s.units.map((u, idx) => ({
+      stationNumber:             u.number || idx + 1,
+      installedCapacity:         u.mainFuel?.capacity ?? 0,
       availableCapacity:         0,
       peakCapacity:              0,
       minReserveCapacity:        0,
@@ -44,8 +46,9 @@ export function seedTypeFromCatalog(
       status:                    "Active",
       stationId:      s.id ?? s._id,
       unitId:         u.id ?? u._id,
-      mainFuel:       u.mainFuel,
-      secondaryFuels: u.secondaryFuels ?? [],
+      stationName:    s.name,
+      mainFuel:       u.mainFuel?.type,
+      secondaryFuels: (u.secondaryFuels ?? []).map((f) => f.type),
     }));
   }
   return out;

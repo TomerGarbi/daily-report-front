@@ -54,14 +54,22 @@ export const STATION_FUEL_LABELS: Record<StationFuel, string> = {
   other:    "אחר",
 };
 
+/** One fuel a unit can run on, plus the peak MW it produces on that fuel. */
+export interface FuelCapacity {
+  type: StationFuel;
+  capacity: number;
+}
+
 export interface Unit {
   /** Mongo sub-doc id; surfaced through Mongoose's `_id` virtual. */
   _id?: string;
   id?: string;
-  tag: string;
-  installedCapacity: number;
-  mainFuel: string;
-  secondaryFuels: string[];
+  /** Human-friendly unit number (unique within the parent station). */
+  number: number;
+  /** Primary fuel + its peak capacity in MW. */
+  mainFuel: FuelCapacity;
+  /** Backup fuels the unit can switch to, each with its own peak capacity. */
+  secondaryFuels: FuelCapacity[];
 }
 
 export interface Station {
@@ -70,10 +78,46 @@ export interface Station {
   name: string;
   tag: string;
   type: StationType;
-  fuel: StationFuel;
+  /**
+   * Units define the station's capacity and fuels. The station's overall
+   * "main fuel" is derived (see `getStationMainFuel`) — not stored.
+   */
   units: Unit[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Derived helpers ────────────────────────────────────────────────────────
+
+/**
+ * Return the station's primary fuel by taking the most common `mainFuel.type`
+ * across its units. Ties are resolved by the canonical order in
+ * `STATION_FUELS`. Returns `null` for a station with no units.
+ */
+export function getStationMainFuel(units: Unit[] | undefined): StationFuel | null {
+  if (!units || units.length === 0) return null;
+  const counts = new Map<StationFuel, number>();
+  for (const u of units) {
+    const t = u.mainFuel?.type;
+    if (!t) continue;
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  let best: StationFuel | null = null;
+  let bestCount = 0;
+  for (const f of STATION_FUELS) {
+    const c = counts.get(f) ?? 0;
+    if (c > bestCount) {
+      best = f;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+/** Sum of each unit's main-fuel peak capacity across the station, in MW. */
+export function getStationTotalCapacity(units: Unit[] | undefined): number {
+  if (!units) return 0;
+  return units.reduce((sum, u) => sum + (Number(u.mainFuel?.capacity) || 0), 0);
 }
 
 export interface StationsListResponse {
@@ -88,17 +132,15 @@ export interface StationsListResponse {
 // ─── Mutation payloads ──────────────────────────────────────────────────────
 
 export interface UnitPayload {
-  tag: string;
-  installedCapacity: number;
-  mainFuel: string;
-  secondaryFuels?: string[];
+  number: number;
+  mainFuel: FuelCapacity;
+  secondaryFuels?: FuelCapacity[];
 }
 
 export interface CreateStationPayload {
   name: string;
   tag: string;
   type: StationType;
-  fuel: StationFuel;
   units?: UnitPayload[];
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Table,
   TableBody,
@@ -12,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/Spinner";
 import { Pencil, Trash2 } from "lucide-react";
-import { STATION_TYPE_LABELS, STATION_FUEL_LABELS, type Station } from "@/types/station";
+import { STATION_TYPE_LABELS, STATION_FUEL_LABELS, getStationMainFuel, getStationTotalCapacity, type Station } from "@/types/station";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +42,7 @@ export function StationsTable({
   onEdit,
   onDelete,
 }: StationsTableProps) {
+  const tErrors = useTranslations("errors.sections");
   const [pendingDelete, setPendingDelete] = useState<Station | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -82,7 +84,7 @@ export function StationsTable({
             ) : error ? (
               <TableRow>
                 <TableCell colSpan={canManage ? 7 : 6} className="py-16 text-center text-rose-500">
-                  שגיאה בטעינת התחנות
+                  {tErrors("stations")}
                 </TableCell>
               </TableRow>
             ) : stations.length === 0 ? (
@@ -93,7 +95,8 @@ export function StationsTable({
               </TableRow>
             ) : (
               stations.map((s, idx) => {
-                const totalCapacity = (s.units ?? []).reduce((sum, u) => sum + (Number(u.installedCapacity) || 0), 0);
+                const totalCapacity = getStationTotalCapacity(s.units);
+                const mainFuel      = getStationMainFuel(s.units);
                 return (
                   <TableRow
                     key={s.id ?? s._id}
@@ -102,7 +105,7 @@ export function StationsTable({
                     <TableCell className="font-medium text-slate-800">{s.name}</TableCell>
                     <TableCell className="text-slate-600 tabular-nums">{s.tag}</TableCell>
                     <TableCell className="text-slate-600">{STATION_TYPE_LABELS[s.type]}</TableCell>
-                    <TableCell className="text-slate-600">{STATION_FUEL_LABELS[s.fuel]}</TableCell>
+                    <TableCell className="text-slate-600">{mainFuel ? STATION_FUEL_LABELS[mainFuel] : "—"}</TableCell>
                     <TableCell className="text-slate-600 tabular-nums">{s.units?.length ?? 0}</TableCell>
                     <TableCell className="text-slate-600 tabular-nums">{totalCapacity} MW</TableCell>
                     {canManage && (

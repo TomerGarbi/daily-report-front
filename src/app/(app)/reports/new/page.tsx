@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   FileText,
   LayoutList,
@@ -27,7 +28,19 @@ import {
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
 import { FuelsSection } from "@/components/reports/FuelsSection";
-import { ExecutiveSummarySection } from "@/components/reports/ExecutiveSummarySection";
+// Deferred: ExecutiveSummarySection pulls in the entire recharts library. It
+// is only rendered on the last stepper step, so lazy-loading skips the cost
+// for reports that are saved before ever reaching the summary.
+const ExecutiveSummarySection = dynamic(
+  () =>
+    import("@/components/reports/ExecutiveSummarySection").then((m) => ({
+      default: m.ExecutiveSummarySection,
+    })),
+  {
+    ssr: false,
+    loading: () => <Spinner />,
+  },
+);
 import type { ArchiveBlock, ForecastBlock, FuelsBlock, ReportContent } from "@/types/report";
 import { emptyReportContent, normalizeReportContent, emptyFuelRow } from "@/types/report";
 import { emptyForecast } from "@/components/reports/forecast/forecast-defaults";
@@ -35,7 +48,6 @@ import { forecastSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { fetchLatestReport } from "@/lib/api";
 import { fetchStations } from "@/lib/stations-api";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
@@ -142,7 +154,6 @@ function ModeCard({
 export default function NewReportPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const authFetch = useAuthFetch();
   const { createReport } = useReportMutations();
 
   const [mode, setMode] = useState<CreationMode | null>(null);
@@ -215,7 +226,7 @@ export default function NewReportPage() {
   // "Add site" dropdown empty in the fuels section).
   useEffect(() => {
     let cancelled = false;
-    fetchFuelSites(authFetch)
+    fetchFuelSites()
       .then((s) => {
         if (!cancelled) {
           setFuelSites(s);
@@ -231,7 +242,7 @@ export default function NewReportPage() {
         toast.error("שגיאה בטעינת קטלוג אתרי הדלק");
       });
     return () => { cancelled = true; };
-  }, [authFetch]);
+  }, []);
 
   // ── Mode selection ────────────────────────────────────────────────────
   const handleModeSelect = useCallback(
@@ -243,7 +254,7 @@ export default function NewReportPage() {
           // iec → iec bucket. Each station's `fuel` decides which sub-table
           // it lands in. Defaults: status=Active, installedCapacity from
           // catalog, all other capacities 0.
-          const fetched = await fetchStations(authFetch);
+          const fetched = await fetchStations();
           setStations(fetched);
           setContent((prev) => ({
             private: seedTypeFromCatalog(fetched, "private"),
@@ -252,8 +263,8 @@ export default function NewReportPage() {
           }));
         } else if (selected === "last-report") {
           const [report, fetched] = await Promise.all([
-            fetchLatestReport(authFetch),
-            fetchStations(authFetch),
+            fetchLatestReport(),
+            fetchStations(),
           ]);
           setStations(fetched);
           if (report?.content) {
@@ -280,7 +291,7 @@ export default function NewReportPage() {
         setIsLoadingData(false);
       }
     },
-    [authFetch],
+    [],
   );
 
   // ── Warn on refresh / tab close (only after mode chosen) ──────────────
@@ -438,14 +449,24 @@ export default function NewReportPage() {
                 <FileDown className="h-5 w-5" />
                 <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
               </Button>
-              <Button
-                size="lg"
-                onClick={() => setActiveSection("iec")}
-                className="gap-2 text-base px-8"
-              >
-                <span>חברת חשמל</span>
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("iec")}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>חברת חשמל</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -469,6 +490,14 @@ export default function NewReportPage() {
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
               <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
                 <Button
                   size="lg"
                   variant="outline"
@@ -511,6 +540,14 @@ export default function NewReportPage() {
                 <span>חזרה לחברת חשמל</span>
               </Button>
               <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
                 <Button
                   size="lg"
                   variant="outline"
@@ -559,6 +596,14 @@ export default function NewReportPage() {
                 <Button
                   size="lg"
                   variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
                   onClick={() => handleSave("draft")}
                   disabled={isSaving}
                   className="gap-2 text-base px-8"
@@ -598,6 +643,14 @@ export default function NewReportPage() {
                 <span>חזרה לארכיון</span>
               </Button>
               <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
                 <Button
                   size="lg"
                   variant="outline"
@@ -642,6 +695,14 @@ export default function NewReportPage() {
                 <span>חזרה לדלקים</span>
               </Button>
               <div className="flex gap-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>הדפס נתונים לקונסול</span>
+                </Button>
                 <Button
                   size="lg"
                   variant="outline"

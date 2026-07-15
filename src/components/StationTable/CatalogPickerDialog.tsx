@@ -80,7 +80,7 @@ export function CatalogPickerDialog({
     () =>
       (selectedStation?.units ?? []).map((u) => ({
         value: u.id ?? u._id ?? "",
-        label: `${u.tag} — ${u.installedCapacity} MW · ${u.mainFuel}`,
+        label: `#${u.number} — ${u.mainFuel.capacity} MW · ${STATION_FUEL_LABELS[u.mainFuel.type] ?? u.mainFuel.type}`,
       })),
     [selectedStation],
   );
@@ -170,10 +170,16 @@ export function CatalogPickerDialog({
 
               {selectedUnit && (
                 <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
-                  <div><span className="font-semibold">יכולת מותקנת:</span> {selectedUnit.installedCapacity} MW</div>
-                  <div><span className="font-semibold">דלק עיקרי:</span> {selectedUnit.mainFuel}</div>
+                  <div><span className="font-semibold">מספר יחידה:</span> {selectedUnit.number}</div>
+                  <div><span className="font-semibold">יכולת מותקנת (דלק עיקרי):</span> {selectedUnit.mainFuel.capacity} MW</div>
+                  <div><span className="font-semibold">דלק עיקרי:</span> {STATION_FUEL_LABELS[selectedUnit.mainFuel.type] ?? selectedUnit.mainFuel.type}</div>
                   {selectedUnit.secondaryFuels?.length ? (
-                    <div><span className="font-semibold">דלקים משניים:</span> {selectedUnit.secondaryFuels.join(", ")}</div>
+                    <div>
+                      <span className="font-semibold">דלקים משניים:</span>{" "}
+                      {selectedUnit.secondaryFuels
+                        .map((f) => `${STATION_FUEL_LABELS[f.type] ?? f.type} (${f.capacity} MW)`)
+                        .join(", ")}
+                    </div>
                   ) : null}
                   <div className="text-muted-foreground pt-1">
                     שדות אלו יוגדרו כברירת-מחדל בשורה ולא ניתן יהיה לערוך אותם בדוח.

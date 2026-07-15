@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   Table,
   TableBody,
@@ -44,6 +45,7 @@ interface LogTableProps {
 }
 
 export function LogTable({ logs, isLoading, error, onSelect }: LogTableProps) {
+  const tErrors = useTranslations("errors.sections");
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <Table>
@@ -66,7 +68,7 @@ export function LogTable({ logs, isLoading, error, onSelect }: LogTableProps) {
           ) : error ? (
             <TableRow>
               <TableCell colSpan={5} className="py-16 text-center text-rose-500">
-                שגיאה בטעינת הלוגים
+                {tErrors("logs")}
               </TableCell>
             </TableRow>
           ) : logs.length === 0 ? (
