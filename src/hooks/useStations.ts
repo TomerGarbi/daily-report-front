@@ -43,7 +43,8 @@ export interface UseStationsReturn {
 export function useStations(params: StationsQueryParams = {}): UseStationsReturn {
   const url = useMemo(
     () => buildStationsUrl(params),
-    [params.type, params.fuel, params.search, params.page, params.limit],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params.type, params.fuel, params.groupId, params.search, params.page, params.limit],
   );
 
   const { data, isLoading, error } = useAuthSWR<unknown>(url);

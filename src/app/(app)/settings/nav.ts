@@ -1,6 +1,7 @@
 import {
   Building2,
   Fuel,
+  Layers,
   Palette,
   Activity,
   UserCircle,
@@ -29,6 +30,13 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: "ניהול קטלוג התחנות והיחידות. ערכים אלה משמשים כברירת-מחדל בדוחות היומיים.",
     icon: Building2,
     requiresManage: false, // any user can browse; mutations are gated server-side
+  },
+  {
+    href: "/settings/station-groups",
+    label: "קבוצות תחנות",
+    description: "ניהול קבוצות התחנות שלפיהן הטבלאות בדוחות היומיים מחולקות.",
+    icon: Layers,
+    requiresManage: false,
   },
   {
     href: "/settings/fuel-sites",

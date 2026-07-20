@@ -24,6 +24,7 @@ import { apiClient, toApiError } from "@/lib/apiClient";
 export interface StationsQueryParams {
   type?: StationType;
   fuel?: StationFuel;
+  groupId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -31,11 +32,12 @@ export interface StationsQueryParams {
 
 export function buildStationsUrl(params: StationsQueryParams = {}): string {
   const q = new URLSearchParams();
-  if (params.type)         q.set("type",  params.type);
-  if (params.fuel)         q.set("fuel",  params.fuel);
-  if (params.search)       q.set("search", params.search);
-  if (params.page  != null) q.set("page",  String(params.page));
-  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.type)          q.set("type",     params.type);
+  if (params.fuel)          q.set("fuel",     params.fuel);
+  if (params.groupId)       q.set("groupId",  params.groupId);
+  if (params.search)        q.set("search",   params.search);
+  if (params.page  != null) q.set("page",     String(params.page));
+  if (params.limit != null) q.set("limit",    String(params.limit));
   return `/api/v1/stations?${q.toString()}`;
 }
 

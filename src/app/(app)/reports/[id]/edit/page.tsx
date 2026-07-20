@@ -32,7 +32,9 @@ import { Button } from "@/components/ui/button";
 import { useReport, useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
+import { fetchStationGroups } from "@/lib/station-groups-api";
 import type { FuelSite } from "@/types/fuelSite";
+import type { StationGroup } from "@/types/stationGroup";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
 
@@ -57,6 +59,7 @@ export default function EditReportPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
+  const [groups, setGroups] = useState<StationGroup[]>([]);
 
   // ── Per-section setters ───────────────────────────────────────────────
   const setPrivateBuckets = useCallback(
@@ -117,8 +120,9 @@ export default function EditReportPage() {
     let cancelled = false;
     fetchFuelSites()
       .then((s) => { if (!cancelled) setFuelSites(s); })
-      .catch((err) => console.error("[EditReport] fetchFuelSites failed:", err));
-    return () => { cancelled = true; };
+      .catch((err) => console.error("[EditReport] fetchFuelSites failed:", err));    fetchStationGroups()
+      .then((g) => { if (!cancelled) setGroups(g); })
+      .catch((err) => console.error("[EditReport] fetchStationGroups failed:", err));    return () => { cancelled = true; };
   }, []);
   // ── Warn on refresh / tab close ───────────────────────────────────────
   useEffect(() => {
@@ -243,6 +247,8 @@ export default function EditReportPage() {
           <div className="space-y-8">
             <FuelGroupedTables
               buckets={content.private}
+              groups={groups}
+              type="private"
               onChange={setPrivateBuckets}
               titlePrefix="יחידות פרטיות"
             />
@@ -274,6 +280,8 @@ export default function EditReportPage() {
           <div className="space-y-8">
             <FuelGroupedTables
               buckets={content.iec}
+              groups={groups}
+              type="iec"
               onChange={setIecBuckets}
               titlePrefix="חברת חשמל"
             />

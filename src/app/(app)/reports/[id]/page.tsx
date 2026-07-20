@@ -12,7 +12,9 @@ import { FuelsSection } from "@/components/reports/FuelsSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
+import { fetchStationGroups } from "@/lib/station-groups-api";
 import type { FuelSite } from "@/types/fuelSite";
+import type { StationGroup } from "@/types/stationGroup";
 import { normalizeReportContent } from "@/types/report";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -49,12 +51,16 @@ export default function ReportViewPage() {
   const { user } = useAuth();
   const { report, isLoading, error } = useReport(id);
   const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
+  const [groups, setGroups]       = useState<StationGroup[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     fetchFuelSites()
       .then((s) => { if (!cancelled) setFuelSites(s); })
       .catch((err) => console.error("[ReportView] fetchFuelSites failed:", err));
+    fetchStationGroups()
+      .then((g) => { if (!cancelled) setGroups(g); })
+      .catch((err) => console.error("[ReportView] fetchStationGroups failed:", err));
     return () => { cancelled = true; };
   }, []);
 
@@ -166,6 +172,8 @@ export default function ReportViewPage() {
         {hasPrivate && (
           <FuelGroupedTables
             buckets={content.private}
+            groups={groups}
+            type="private"
             titlePrefix="יחידות פרטיות"
             readOnly
           />
@@ -174,6 +182,8 @@ export default function ReportViewPage() {
         {hasIec && (
           <FuelGroupedTables
             buckets={content.iec}
+            groups={groups}
+            type="iec"
             titlePrefix="חברת חשמל"
             readOnly
           />

@@ -46,9 +46,20 @@ export interface StationRow {
   mainFuel?: string;
   /** Snapshot of the unit's backup fuels at row-creation time. */
   secondaryFuels?: string[];
+  /**
+   * Snapshot of the station's `StationGroup.tag` at row-creation time.
+   * Used purely as a stable label if the outer bucket key ever gets out
+   * of sync with reality; the authoritative grouping is still the outer
+   * `GroupBuckets` key.
+   */
+  groupTag?: string;
 }
 
-/** Map of station-group name → rows */
+/**
+ * Inner bucket keyed by station display name → rows. Nested inside a
+ * {@link GroupBuckets} entry to give report tables a two-level layout
+ * (group → station → rows).
+ */
 export type StationData = Record<string, StationRow[]>;
 
 // ─── Report content ─────────────────────────────────────────────────────────
@@ -59,13 +70,19 @@ import { STATION_FUELS } from "./station";
 /**
  * Top-level report content.
  *
- * Stations are grouped by ownership type (`private` vs `iec`) and then by
- * primary fuel. Each leaf bucket is a `StationData` map (station-name → rows).
+ * Stations are grouped by ownership type (`private` vs `iec`) and then
+ * further by {@link StationGroup} — the outer bucket keys are `group.tag`
+ * strings. Each leaf bucket is a `StationData` map (station-name → rows).
  *
- * This shape replaces the legacy 4-bucket layout
- * (`stationData` / `gasData` / `renewableData` / `electricData`) which was
- * tied to the old `category` enum on stations.
+ * This shape replaces the previous fuel-based layout
+ * (`Partial<Record<StationFuel, StationData>>`) which was migrated by
+ * `scripts/migrateStationsToGroups.ts`. Legacy reports whose keys still
+ * match `StationFuel` values are re-mapped on the fly by
+ * `normalizeReportContent` using the default `<type>-<fuel>` tags.
  */
+/** Bucket keyed by `StationGroup.tag`. */
+export type GroupBuckets = Record<string, StationData>;
+
 // ─── Forecast section ──────────────────────────────────────────────────────
 
 /** One day's load forecast figures. */
@@ -110,8 +127,8 @@ export interface ForecastBlock {
 }
 
 export interface ReportContent {
-  private:   Partial<Record<StationFuel, StationData>>;
-  iec:       Partial<Record<StationFuel, StationData>>;
+  private:   GroupBuckets;
+  iec:       GroupBuckets;
   forecast?: ForecastBlock;
   archive?:  ArchiveBlock;
   /** Optional additional historical days, ordered from most-recent (day before
@@ -133,17 +150,50 @@ export const emptyReportContent = (): ReportContent => ({
  * Best-effort migration from older payloads (or partial new-shape ones)
  * to the canonical `ReportContent` structure. Always returns a value
  * with both `private` and `iec` keys present, never throws.
+ *
+ * Legacy fuel-keyed buckets (`private.gas`, `private.solar`, …) are
+ * transparently re-mapped to the default `<type>-<fuel>` group tags
+ * emitted by `scripts/migrateStationsToGroups.ts` so old reports keep
+ * rendering under the new group-based UI even before the DB migration
+ * runs.
  */
 export function normalizeReportContent(raw: unknown): ReportContent {
   const out = emptyReportContent();
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
 
-  // ── New shape ────────────────────────────────────────────────────────────
-  const isFuelMap = (v: unknown): v is Partial<Record<StationFuel, StationData>> =>
-    !!v && typeof v === "object";
-  if (isFuelMap(obj.private)) Object.assign(out.private, obj.private);
-  if (isFuelMap(obj.iec))     Object.assign(out.iec,     obj.iec);
+  // ── New / group-keyed shape (or legacy fuel-keyed, remapped inline) ──────
+  const remapBucket = (
+    type: "private" | "iec",
+    src: unknown,
+  ): GroupBuckets => {
+    const result: GroupBuckets = {};
+    if (!src || typeof src !== "object") return result;
+    for (const [key, data] of Object.entries(src as Record<string, unknown>)) {
+      if (!data || typeof data !== "object") continue;
+      // If the key is a legacy fuel name, remap it to the default group
+      // tag so the row lands under the migrated bucket.
+      const groupTag = (STATION_FUELS as string[]).includes(key)
+        ? `${type}-${key}`
+        : key;
+      const bucket = (result[groupTag] ??= {});
+      for (const [stationName, rows] of Object.entries(data as Record<string, unknown>)) {
+        if (!Array.isArray(rows)) continue;
+        bucket[stationName] = [
+          ...(bucket[stationName] ?? []),
+          ...rows.map((r): StationRow => ({
+            ...(r as StationRow),
+            groupTag: (r as StationRow).groupTag ?? groupTag,
+          })),
+        ];
+      }
+    }
+    return result;
+  };
+
+  Object.assign(out.private, remapBucket("private", obj.private));
+  Object.assign(out.iec,     remapBucket("iec",     obj.iec));
+
   if (obj.archive)             out.archive = normalizeArchiveBlock(obj.archive);
   if (obj.lastYearArchive)     out.lastYearArchive = normalizeLastYearArchiveBlock(obj.lastYearArchive);
   if (Array.isArray(obj.archiveExtraDays)) {
@@ -154,13 +204,12 @@ export function normalizeReportContent(raw: unknown): ReportContent {
     out.fuels = obj.fuels.map(normalizeFuelRow);
   }
 
-  // ── Legacy shape ─────────────────────────────────────────────────────────
-  // Migrate if any of the old keys are present and the new ones were empty.
+  // ── Very-legacy 4-bucket shape (pre-fuel-buckets) ────────────────────────
   const legacyKeys = ["stationData", "gasData", "renewableData", "electricData"] as const;
   const hasLegacy = legacyKeys.some((k) => obj[k] && typeof obj[k] === "object");
   if (hasLegacy) {
     const placeRows = (
-      bucket: "private" | "iec",
+      type: "private" | "iec",
       data: unknown,
       fallbackFuel: StationFuel,
     ) => {
@@ -178,8 +227,12 @@ export function normalizeReportContent(raw: unknown): ReportContent {
           byFuel.set(f, arr);
         }
         for (const [fuel, fuelRows] of byFuel) {
-          const fuelBucket = (out[bucket][fuel] ??= {});
-          fuelBucket[name] = [...(fuelBucket[name] ?? []), ...fuelRows];
+          const groupTag = `${type}-${fuel}`;
+          const groupBucket = (out[type][groupTag] ??= {});
+          groupBucket[name] = [
+            ...(groupBucket[name] ?? []),
+            ...fuelRows.map((r) => ({ ...r, groupTag: r.groupTag ?? groupTag })),
+          ];
         }
       }
     };

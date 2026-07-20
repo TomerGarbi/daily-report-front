@@ -79,6 +79,12 @@ export interface Station {
   tag: string;
   type: StationType;
   /**
+   * Reference to the {@link StationGroup} that decides how this station
+   * is grouped inside report tables. `null` / missing means the catalog
+   * still needs to be migrated to the new group-based layout.
+   */
+  groupId?: string | null;
+  /**
    * Units define the station's capacity and fuels. The station's overall
    * "main fuel" is derived (see `getStationMainFuel`) — not stored.
    */
@@ -141,6 +147,7 @@ export interface CreateStationPayload {
   name: string;
   tag: string;
   type: StationType;
+  groupId?: string | null;
   units?: UnitPayload[];
 }
 

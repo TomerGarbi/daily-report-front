@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useStations, useStationMutations } from "@/hooks/useStations";
+import { useStationGroups } from "@/hooks/useStationGroups";
 import { Button } from "@/components/ui/button";
 import { FieldText } from "@/components/inputs/FieldText";
 import { FieldSelect } from "@/components/inputs/FieldSelect";
@@ -49,6 +50,7 @@ export default function StationsSettingsPage() {
   const [search,   setSearch]   = useState("");
   const [typeFilter, setTypeFilter] = useState<StationType | "all">("all");
   const [fuelFilter, setFuelFilter] = useState<StationFuel | "all">("all");
+  const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page,     setPage]     = useState(1);
 
   const queryParams = useMemo(
@@ -56,13 +58,18 @@ export default function StationsSettingsPage() {
       search: search.trim() || undefined,
       type: typeFilter === "all" ? undefined : typeFilter,
       fuel: fuelFilter === "all" ? undefined : fuelFilter,
+      groupId: groupFilter === "all" ? undefined : groupFilter,
       page,
       limit: PAGE_SIZE,
     }),
-    [search, typeFilter, fuelFilter, page],
+    [search, typeFilter, fuelFilter, groupFilter, page],
   );
 
   const { stations, total, totalPages, isLoading, error } = useStations(queryParams);
+
+  // All groups (unfiltered) — used to render the group filter, the table
+  // column, and the group selector inside the edit dialog.
+  const { groups: stationGroups } = useStationGroups({});
 
   const {
     createStation,
@@ -180,10 +187,27 @@ export default function StationsSettingsPage() {
             options={FUEL_FILTER_OPTIONS}
           />
         </div>
+        <div className="w-full md:w-52">
+          <FieldSelect
+            label="קבוצה"
+            value={groupFilter}
+            onValueChange={(v) => {
+              setPage(1);
+              setGroupFilter(v);
+            }}
+            options={[
+              { value: "all", label: "כל הקבוצות" },
+              ...stationGroups
+                .filter((g) => typeFilter === "all" || g.type === typeFilter)
+                .map((g) => ({ value: (g.id ?? g._id) as string, label: g.name })),
+            ]}
+          />
+        </div>
       </div>
 
       <StationsTable
         stations={stations}
+        groups={stationGroups}
         isLoading={isLoading}
         error={error?.message ?? null}
         canManage={canManage}
@@ -205,6 +229,7 @@ export default function StationsSettingsPage() {
 
       <StationEditDialog
         station={editTarget}
+        groups={stationGroups}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreate={handleCreate}

@@ -50,8 +50,10 @@ import { useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchLatestReport } from "@/lib/api";
 import { fetchStations } from "@/lib/stations-api";
+import { fetchStationGroups } from "@/lib/station-groups-api";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
 import type { Station } from "@/types/station";
+import type { StationGroup } from "@/types/stationGroup";
 import type { FuelSite } from "@/types/fuelSite";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "sonner";
@@ -159,6 +161,7 @@ export default function NewReportPage() {
   const [mode, setMode] = useState<CreationMode | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [stations, setStations] = useState<Station[]>([]);
+  const [groups, setGroups] = useState<StationGroup[]>([]);
   const [fuelSites, setFuelSites] = useState<FuelSite[]>([]);
 
   const [title, setTitle] = useState(getTodayTitle());
@@ -251,22 +254,28 @@ export default function NewReportPage() {
       try {
         if (selected === "scratch") {
           // Pre-populate from the station catalog: private → private bucket,
-          // iec → iec bucket. Each station's `fuel` decides which sub-table
+          // iec → iec bucket. Each station's group decides which sub-table
           // it lands in. Defaults: status=Active, installedCapacity from
           // catalog, all other capacities 0.
-          const fetched = await fetchStations();
+          const [fetched, fetchedGroups] = await Promise.all([
+            fetchStations(),
+            fetchStationGroups(),
+          ]);
           setStations(fetched);
+          setGroups(fetchedGroups);
           setContent((prev) => ({
-            private: seedTypeFromCatalog(fetched, "private"),
-            iec:     seedTypeFromCatalog(fetched, "iec"),
+            private: seedTypeFromCatalog(fetched, "private", fetchedGroups),
+            iec:     seedTypeFromCatalog(fetched, "iec",     fetchedGroups),
             fuels:   prev.fuels,  // preserve fuel rows seeded from catalog
           }));
         } else if (selected === "last-report") {
-          const [report, fetched] = await Promise.all([
+          const [report, fetched, fetchedGroups] = await Promise.all([
             fetchLatestReport(),
             fetchStations(),
+            fetchStationGroups(),
           ]);
           setStations(fetched);
+          setGroups(fetchedGroups);
           if (report?.content) {
             const normalized = normalizeReportContent(report.content);
             setContent((prev) => ({
@@ -434,6 +443,8 @@ export default function NewReportPage() {
           <div className="space-y-8">
             <FuelGroupedTables
               buckets={content.private}
+              groups={groups}
+              type="private"
               onChange={setPrivateBuckets}
               titlePrefix="יחידות פרטיות"
             />
@@ -475,6 +486,8 @@ export default function NewReportPage() {
           <div className="space-y-8">
             <FuelGroupedTables
               buckets={content.iec}
+              groups={groups}
+              type="iec"
               onChange={setIecBuckets}
               titlePrefix="חברת חשמל"
             />
