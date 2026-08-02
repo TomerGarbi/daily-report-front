@@ -24,6 +24,14 @@ import {
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
 import { FuelsSection } from "@/components/reports/FuelsSection";
+import { RefreshFromDbButton } from "@/components/reports/RefreshFromDbButton";
+import {
+  fetchPrivateSectionFromDb,
+  fetchIecSectionFromDb,
+  fetchForecastSectionFromDb,
+  fetchArchiveSectionFromDb,
+  fetchFuelsSectionFromDb,
+} from "@/lib/db-section-api";
 import type { ArchiveBlock, ForecastBlock, FuelsBlock, ReportContent } from "@/types/report";
 import { emptyReportContent, normalizeReportContent } from "@/types/report";
 import { emptyForecast } from "@/components/reports/forecast/forecast-defaults";
@@ -182,6 +190,35 @@ export default function EditReportPage() {
     [id, title, subtitle, content, updateReport, router],
   );
 
+  // ── Per-section DB refresh handlers ────────────────────────────────────
+  const handleRefreshPrivateFromDb = useCallback(async () => {
+    const data = await fetchPrivateSectionFromDb();
+    setPrivateBuckets(data);
+  }, [setPrivateBuckets]);
+
+  const handleRefreshIecFromDb = useCallback(async () => {
+    const data = await fetchIecSectionFromDb();
+    setIecBuckets(data);
+  }, [setIecBuckets]);
+
+  const handleRefreshForecastFromDb = useCallback(async () => {
+    const data = await fetchForecastSectionFromDb();
+    setForecast(data);
+  }, [setForecast]);
+
+  const handleRefreshArchiveFromDb = useCallback(async () => {
+    const result = await fetchArchiveSectionFromDb();
+    setArchive(result.archive);
+    if (result.lastYearArchive) {
+      setContent((c) => ({ ...c, lastYearArchive: result.lastYearArchive }));
+    }
+  }, [setArchive]);
+
+  const handleRefreshFuelsFromDb = useCallback(async () => {
+    const data = await fetchFuelsSectionFromDb();
+    setFuels(data);
+  }, [setFuels]);
+
   // ── Loading / error states ────────────────────────────────────────────
   if (reportLoading) {
     return (
@@ -254,16 +291,19 @@ export default function EditReportPage() {
             />
 
             <div className="flex justify-between">
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => handleSave("draft")}
-                disabled={isSaving}
-                className="gap-2 text-base px-8"
-              >
-                <FileDown className="h-5 w-5" />
-                <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
+                  className="gap-2 text-base px-8"
+                >
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "מעדכן..." : "עדכן כטיוטה"}</span>
+                </Button>
+                <RefreshFromDbButton onRefresh={handleRefreshPrivateFromDb} disabled={isSaving} />
+              </div>
               <Button
                 size="lg"
                 onClick={() => setActiveSection("iec")}
@@ -296,7 +336,8 @@ export default function EditReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshIecFromDb} disabled={isSaving} />
                 <Button
                   size="lg"
                   variant="outline"
@@ -338,7 +379,8 @@ export default function EditReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לחברת חשמל</span>
               </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshForecastFromDb} disabled={isSaving} />
                 <Button
                   size="lg"
                   variant="outline"
@@ -383,7 +425,8 @@ export default function EditReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לתחזית</span>
               </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshArchiveFromDb} disabled={isSaving} />
                 <Button
                   size="lg"
                   variant="outline"
@@ -425,7 +468,8 @@ export default function EditReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לארכיון</span>
               </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshFuelsFromDb} disabled={isSaving} />
                 <Button
                   size="lg"
                   variant="outline"
@@ -499,14 +543,16 @@ export default function EditReportPage() {
                 <span>חזרה לדלקים</span>
               </Button>
               <div className="flex gap-3">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, status: report.status, content })}
-                  className="gap-2 text-base px-8"
-                >
-                  <span>הדפס נתונים לקונסול</span>
-                </Button>
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, status: report.status, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"

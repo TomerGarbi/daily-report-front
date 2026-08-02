@@ -23,9 +23,11 @@ import {
   createReport as apiCreateReport,
   updateReport as apiUpdateReport,
   deleteReport as apiDeleteReport,
+  createReportFromDb as apiCreateReportFromDb,
   type ReportStats,
   type CreateReportPayload,
   type UpdateReportPayload,
+  type CreateReportFromDbPayload,
   type ReportsQueryParams,
   type PaginatedReports,
 } from "@/lib/api";
@@ -122,6 +124,8 @@ export function useReportStats(): UseReportStatsReturn {
 export interface UseReportMutationsReturn {
   /** Create a report and invalidate the reports + stats cache. */
   createReport: (payload: CreateReportPayload) => Promise<Report>;
+  /** Create a report from SQL DB data and invalidate the cache. */
+  createReportFromDb: (payload: CreateReportFromDbPayload) => Promise<Report>;
   /** Update a report and invalidate the reports + stats cache. */
   updateReport: (id: string, payload: UpdateReportPayload) => Promise<Report>;
   /** Delete a report and invalidate the reports + stats cache. */
@@ -153,6 +157,15 @@ export function useReportMutations(): UseReportMutationsReturn {
     [invalidateReportsCache],
   );
 
+  const createReportFromDb = useCallback(
+    async (payload: CreateReportFromDbPayload): Promise<Report> => {
+      const report = await apiCreateReportFromDb(payload);
+      invalidateReportsCache();
+      return report;
+    },
+    [invalidateReportsCache],
+  );
+
   const updateReport = useCallback(
     async (id: string, payload: UpdateReportPayload): Promise<Report> => {
       const report = await apiUpdateReport(id, payload);
@@ -170,7 +183,7 @@ export function useReportMutations(): UseReportMutationsReturn {
     [invalidateReportsCache],
   );
 
-  return { createReport, updateReport, deleteReport };
+  return { createReport, createReportFromDb, updateReport, deleteReport };
 }
 
 // ─── Client-side filter helper (used in both pages) ───────────────────────────

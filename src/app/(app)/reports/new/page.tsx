@@ -17,6 +17,8 @@ import {
   Archive,
   Fuel,
   Crown,
+  Briefcase,
+  Database,
 } from "lucide-react";
 import { StepperHeader } from "@/components/StepperHeader";
 import type { StepperSection } from "@/components/StepperHeader";
@@ -28,13 +30,22 @@ import {
 import { ForecastSection } from "@/components/reports/forecast/ForecastSection";
 import { ArchiveSection } from "@/components/reports/ArchiveSection";
 import { FuelsSection } from "@/components/reports/FuelsSection";
-// Deferred: ExecutiveSummarySection pulls in the entire recharts library. It
-// is only rendered on the last stepper step, so lazy-loading skips the cost
-// for reports that are saved before ever reaching the summary.
-const ExecutiveSummarySection = dynamic(
+// Deferred: executive summary pages pull in the full `recharts` bundle.
+// Load them only when the relevant stepper steps are mounted.
+const CEOSummaryPage = dynamic(
   () =>
     import("@/components/reports/ExecutiveSummarySection").then((m) => ({
-      default: m.ExecutiveSummarySection,
+      default: m.CEOSummaryPage,
+    })),
+  {
+    ssr: false,
+    loading: () => <Spinner />,
+  },
+);
+const VPSummaryPage = dynamic(
+  () =>
+    import("@/components/reports/ExecutiveSummarySection").then((m) => ({
+      default: m.VPSummaryPage,
     })),
   {
     ssr: false,
@@ -49,6 +60,14 @@ import { Button } from "@/components/ui/button";
 import { useReportMutations } from "@/hooks/useReports";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchLatestReport } from "@/lib/api";
+import {
+  fetchPrivateSectionFromDb,
+  fetchIecSectionFromDb,
+  fetchForecastSectionFromDb,
+  fetchArchiveSectionFromDb,
+  fetchFuelsSectionFromDb,
+} from "@/lib/db-section-api";
+import { RefreshFromDbButton } from "@/components/reports/RefreshFromDbButton";
 import { fetchStations } from "@/lib/stations-api";
 import { fetchStationGroups } from "@/lib/station-groups-api";
 import { fetchFuelSites } from "@/lib/fuel-sites-api";
@@ -60,7 +79,7 @@ import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type CreationMode = "last-report" | "scratch";
+type CreationMode = "last-report" | "scratch" | "from-db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -95,7 +114,7 @@ function seedFuelsFromCatalog(sites: FuelSite[]): FuelsBlock {
   return rows;
 }
 
-const SECTION_IDS = ["private", "iec", "forecast", "archive", "fuels", "summary"] as const;
+const SECTION_IDS = ["private", "iec", "forecast", "archive", "fuels", "ceo-summary", "vp-summary"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -156,7 +175,7 @@ function ModeCard({
 export default function NewReportPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { createReport } = useReportMutations();
+  const { createReport, createReportFromDb } = useReportMutations();
 
   const [mode, setMode] = useState<CreationMode | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -303,6 +322,56 @@ export default function NewReportPage() {
     [],
   );
 
+  // ── Per-section DB refresh handlers ────────────────────────────────────
+  const handleRefreshPrivateFromDb = useCallback(async () => {
+    const data = await fetchPrivateSectionFromDb();
+    setPrivateBuckets(data);
+  }, [setPrivateBuckets]);
+
+  const handleRefreshIecFromDb = useCallback(async () => {
+    const data = await fetchIecSectionFromDb();
+    setIecBuckets(data);
+  }, [setIecBuckets]);
+
+  const handleRefreshForecastFromDb = useCallback(async () => {
+    const data = await fetchForecastSectionFromDb();
+    setForecast(data);
+  }, [setForecast]);
+
+  const handleRefreshArchiveFromDb = useCallback(async () => {
+    const result = await fetchArchiveSectionFromDb();
+    setArchive(result.archive);
+    if (result.lastYearArchive) {
+      setContent((c) => ({ ...c, lastYearArchive: result.lastYearArchive }));
+    }
+  }, [setArchive]);
+
+  const handleRefreshFuelsFromDb = useCallback(async () => {
+    const data = await fetchFuelsSectionFromDb();
+    setFuels(data);
+  }, [setFuels]);
+
+  // ── From-DB: direct server-side creation ─────────────────────────────
+  // Calls POST /reports/from-db, which fetches and assembles content in the
+  // API layer. On success the user is sent to the new report to review/edit.
+  const handleCreateFromDb = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const report = await createReportFromDb({
+        title,
+        description: subtitle,
+        status: "draft",
+      });
+      toast.success("הדוח נוצר בהצלחה מנתוני מסד הנתונים");
+      router.push(`/reports/${report.id}`);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      toast.error(apiErr.message ?? "שגיאה בטעינת נתונים ממסד הנתונים");
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [title, subtitle, createReportFromDb, router]);
+
   // ── Warn on refresh / tab close (only after mode chosen) ──────────────
   useEffect(() => {
     if (!mode) return;
@@ -406,6 +475,13 @@ export default function NewReportPage() {
                 onClick={() => handleModeSelect("scratch")}
                 disabled={isLoadingData}
               />
+              <ModeCard
+                icon={Database}
+                title="טען נתונים ממסד הנתונים"
+                description="צור דוח אוטומטית מנתוני מערכת SQL — הנתונים יועמסו ישירות מהמסד"
+                onClick={handleCreateFromDb}
+                disabled={isLoadingData}
+              />
             </div>
           )}
         </div>
@@ -415,12 +491,13 @@ export default function NewReportPage() {
 
   // ── Stepper form ──────────────────────────────────────────────────────
   const sections: StepperSection[] = [
-    { id: "private",    label: "יחידות פרטיות",  icon: LayoutList },
-    { id: "iec",        label: "חברת חשמל",      icon: Zap },
-    { id: "forecast",   label: "תחזית",          icon: TrendingUp },
-    { id: "archive",    label: "ארכיון",          icon: Archive },
-    { id: "fuels",      label: "דלקים",          icon: Fuel },
-    { id: "summary",    label: "סיכום להנהלה",  icon: Crown },
+    { id: "private",     label: "יחידות פרטיות",  icon: LayoutList },
+    { id: "iec",         label: "חברת חשמל",      icon: Zap },
+    { id: "forecast",    label: "תחזית",          icon: TrendingUp },
+    { id: "archive",     label: "ארכיון",          icon: Archive },
+    { id: "fuels",       label: "דלקים",          icon: Fuel },
+    { id: "ceo-summary", label: "דוח מנכז″ל",     icon: Crown },
+    { id: "vp-summary",  label: "דוח סמנכז″ל",    icon: Briefcase },
   ];
 
   return (
@@ -450,25 +527,30 @@ export default function NewReportPage() {
             />
 
             <div className="flex justify-between">
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => handleSave("draft")}
-                disabled={isSaving}
-                className="gap-2 text-base px-8"
-              >
-                <FileDown className="h-5 w-5" />
-                <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
-              </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-2">
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
                   className="gap-2 text-base px-8"
                 >
-                  <span>הדפס נתונים לקונסול</span>
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
                 </Button>
+                <RefreshFromDbButton onRefresh={handleRefreshPrivateFromDb} disabled={isSaving} />
+              </div>
+              <div className="flex gap-3">
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   onClick={() => setActiveSection("iec")}
@@ -502,15 +584,18 @@ export default function NewReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה ליחידות פרטיות</span>
               </Button>
-              <div className="flex gap-3">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
-                  className="gap-2 text-base px-8"
-                >
-                  <span>הדפס נתונים לקונסול</span>
-                </Button>
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshIecFromDb} disabled={isSaving} />
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
@@ -552,15 +637,18 @@ export default function NewReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לחברת חשמל</span>
               </Button>
-              <div className="flex gap-3">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
-                  className="gap-2 text-base px-8"
-                >
-                  <span>הדפס נתונים לקונסול</span>
-                </Button>
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshForecastFromDb} disabled={isSaving} />
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
@@ -605,15 +693,18 @@ export default function NewReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לתחזית</span>
               </Button>
-              <div className="flex gap-3">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
-                  className="gap-2 text-base px-8"
-                >
-                  <span>הדפס נתונים לקונסול</span>
-                </Button>
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshArchiveFromDb} disabled={isSaving} />
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
@@ -655,15 +746,18 @@ export default function NewReportPage() {
                 <ArrowRight className="h-5 w-5" />
                 <span>חזרה לארכיון</span>
               </Button>
-              <div className="flex gap-3">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
-                  className="gap-2 text-base px-8"
-                >
-                  <span>הדפס נתונים לקונסול</span>
-                </Button>
+              <div className="flex items-center gap-3">
+                <RefreshFromDbButton onRefresh={handleRefreshFuelsFromDb} disabled={isSaving} />
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
@@ -676,10 +770,10 @@ export default function NewReportPage() {
                 </Button>
                 <Button
                   size="lg"
-                  onClick={() => setActiveSection("summary")}
+                  onClick={() => setActiveSection("ceo-summary")}
                   className="gap-2 text-base px-8"
                 >
-                  <span>סיכום להנהלה</span>
+                  <span>דוח מנכ״ל</span>
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
               </div>
@@ -687,9 +781,9 @@ export default function NewReportPage() {
           </div>
         )}
 
-        {activeSection === "summary" && (
+        {activeSection === "ceo-summary" && (
           <div className="space-y-8">
-            <ExecutiveSummarySection
+            <CEOSummaryPage
               content={content}
               title={title}
               subtitle={subtitle}
@@ -708,14 +802,70 @@ export default function NewReportPage() {
                 <span>חזרה לדלקים</span>
               </Button>
               <div className="flex gap-3">
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                  onClick={() => handleSave("draft")}
+                  disabled={isSaving}
                   className="gap-2 text-base px-8"
                 >
-                  <span>הדפס נתונים לקונסול</span>
+                  <FileDown className="h-5 w-5" />
+                  <span>{isSaving ? "שומר..." : "שמור כטיוטה"}</span>
                 </Button>
+                <Button
+                  size="lg"
+                  onClick={() => setActiveSection("vp-summary")}
+                  className="gap-2 text-base px-8"
+                >
+                  <span>דוח סמנכז″ל</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "vp-summary" && (
+          <div className="space-y-8">
+            <VPSummaryPage
+              content={content}
+              title={title}
+              subtitle={subtitle}
+              date={new Date().toLocaleDateString("he-IL")}
+            />
+
+            <div className="flex justify-between">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setActiveSection("ceo-summary")}
+                className="gap-2 text-base px-8"
+                disabled={isSaving}
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>חזרה לדוח מנכז″ל</span>
+              </Button>
+              <div className="flex gap-3">
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => console.log("[ReportData]", { title, description: subtitle, content })}
+                    className="gap-2 text-base px-8"
+                  >
+                    <span>הדפס נתונים לקונסול</span>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"

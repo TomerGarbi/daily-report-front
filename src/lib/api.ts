@@ -37,6 +37,14 @@ export interface CreateReportPayload {
 
 export interface UpdateReportPayload extends Partial<CreateReportPayload> {}
 
+export interface CreateReportFromDbPayload {
+  title: string;
+  description: string;
+  /** ISO "YYYY-MM-DD". Omit to default to today. */
+  reportDate?: string;
+  status?: ReportStatus;
+}
+
 // ─── URL builders ─────────────────────────────────────────────────────────────
 
 export interface ReportsQueryParams {
@@ -148,6 +156,18 @@ export async function deleteReport(id: string): Promise<void> {
     await apiClient.delete(`/api/v1/reports/${id}`);
   } catch (err) {
     throw toApiError(err, "שגיאה במחיקת הדוח");
+  }
+}
+
+/** POST /api/v1/reports/from-db — create a report from SQL DB data. */
+export async function createReportFromDb(
+  payload: CreateReportFromDbPayload,
+): Promise<Report> {
+  try {
+    const { data } = await apiClient.post("/api/v1/reports/from-db", payload);
+    return normalizeReport(data as Report);
+  } catch (err) {
+    throw toApiError(err, "שגיאה בטעינת נתוני הדוח ממסד הנתונים");
   }
 }
 
